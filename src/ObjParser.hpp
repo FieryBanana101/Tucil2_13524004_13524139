@@ -7,5 +7,5 @@
 
 class ObjParser {
     public:
-        static vector<Triangle> parse(const string& filename);
+        static std::vector<Triangle> parse(const std::string& filename);
 };
