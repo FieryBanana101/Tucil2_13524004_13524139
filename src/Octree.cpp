@@ -48,13 +48,13 @@ Octree *Octree::build(float voxelSize, vector<Vector3>& vertices, vector<Vector3
 
     Octree *octree = new Octree(voxelSize);
     octree->root = new OctreeNode(globalBoundingBox);
-    buildRecursive(octree->root, voxelSize, vertices, faceIndexes);
+    buildRecursively(octree->root, voxelSize, vertices, faceIndexes);
 
     return octree;
 }
 
 
-void Octree::buildRecursive(OctreeNode *currNode, float voxelSize, vector<Vector3>& vertices, vector<Vector3>& faceIndexes) {
+void Octree::buildRecursively(OctreeNode *currNode, float voxelSize, vector<Vector3>& vertices, vector<Vector3>& faceIndexes) {
 
     AABB currBoundingBox = currNode->getBoundingBox();
     Vector3 center = currBoundingBox.getCenter();
@@ -113,7 +113,7 @@ void Octree::buildRecursive(OctreeNode *currNode, float voxelSize, vector<Vector
         }
         else {
             child->setType(OCTREE_NON_LEAF);
-            buildRecursive(child, voxelSize, vertices, regionFaceIndexes);
+            buildRecursively(child, voxelSize, vertices, regionFaceIndexes);
         }
     }
    
@@ -121,19 +121,32 @@ void Octree::buildRecursive(OctreeNode *currNode, float voxelSize, vector<Vector
 
 
 
-void Octree::traverseRecursive(OctreeNode *currNode, ofstream &file, int &numFaces){
+void Octree::traverseRecursively(OctreeNode *currNode, ofstream &file, int &numVertices){
 
     if(currNode->getType() == OCTREE_FILLED_LEAF){
+
         AABB boundingBox = currNode->getBoundingBox();
+
+        /*
+            Cube subdivision viewed from the face such that bottom-left-front is the min vertex,
+            and top-right-back is the max vertex.
+
+            3D view of the subdivision:
+                v7 v6
+                v4 v5  <-- back face
+            v3 v2
+            v0 v1  <-- front face
+        */
+
         Vector3 v0, v1, v2, v3, v4, v5, v6, v7;
         v0 = Vector3(boundingBox.min.x, boundingBox.min.y, boundingBox.min.z);
         v1 = Vector3(boundingBox.max.x, boundingBox.min.y, boundingBox.min.z);
         v2 = Vector3(boundingBox.max.x, boundingBox.max.y, boundingBox.min.z);
         v3 = Vector3(boundingBox.min.x, boundingBox.max.y, boundingBox.min.z);
-        v4 = Vector3(boundingBox.min.x, boundingBox.max.y, boundingBox.max.z);
+        v4 = Vector3(boundingBox.min.x, boundingBox.min.y, boundingBox.max.z);
         v5 = Vector3(boundingBox.max.x, boundingBox.min.y, boundingBox.max.z);
-        v6 = Vector3(boundingBox.min.x, boundingBox.max.y, boundingBox.max.z);
-        v7 = Vector3(boundingBox.max.x, boundingBox.max.y, boundingBox.max.z);
+        v6 = Vector3(boundingBox.max.x, boundingBox.max.y, boundingBox.max.z);
+        v7 = Vector3(boundingBox.min.x, boundingBox.max.y, boundingBox.max.z);
 
         file << "# Octree node\n";
         file << "v " << v0.x << ' ' << v0.y << ' ' << v0.z << '\n';
@@ -145,26 +158,38 @@ void Octree::traverseRecursive(OctreeNode *currNode, ofstream &file, int &numFac
         file << "v " << v6.x << ' ' << v6.y << ' ' << v6.z << '\n';
         file << "v " << v7.x << ' ' << v7.y << ' ' << v7.z << '\n';
 
-        file << "f " << numFaces + 1 << ' ' << numFaces + 3 << ' ' << numFaces + 2 << '\n';
-        file << "f " << numFaces + 1 << ' ' << numFaces + 3 << ' ' << numFaces + 4 << '\n';
-        file << "f " << numFaces + 2 << ' ' << numFaces + 7 << ' ' << numFaces + 3 << '\n';
-        file << "f " << numFaces + 2 << ' ' << numFaces + 7 << ' ' << numFaces + 6 << '\n';
-        file << "f " << numFaces + 5 << ' ' << numFaces + 7 << ' ' << numFaces + 6 << '\n';
-        file << "f " << numFaces + 5 << ' ' << numFaces + 7 << ' ' << numFaces + 8 << '\n';
-        file << "f " << numFaces + 1 << ' ' << numFaces + 8 << ' ' << numFaces + 5 << '\n';
-        file << "f " << numFaces + 1 << ' ' << numFaces + 8 << ' ' << numFaces + 4 << '\n';
-        file << "f " << numFaces + 4 << ' ' << numFaces + 7 << ' ' << numFaces + 3 << '\n';
-        file << "f " << numFaces + 4 << ' ' << numFaces + 7 << ' ' << numFaces + 8 << '\n';
-        file << "f " << numFaces + 1 << ' ' << numFaces + 6 << ' ' << numFaces + 2 << '\n';
-        file << "f " << numFaces + 1 << ' ' << numFaces + 6 << ' ' << numFaces + 5 << '\n';
+        // Front face
+        file << "f " << numVertices + 2 << ' ' << numVertices + 4 << ' ' << numVertices + 1 << '\n';
+        file << "f " << numVertices + 2 << ' ' << numVertices + 4 << ' ' << numVertices + 3 << '\n';
+        
+        // Right face
+        file << "f " << numVertices + 3 << ' ' << numVertices + 6 << ' ' << numVertices + 2 << '\n';
+        file << "f " << numVertices + 3 << ' ' << numVertices + 6 << ' ' << numVertices + 7 << '\n';
+
+        // Back face
+        file << "f " << numVertices + 5 << ' ' << numVertices + 7 << ' ' << numVertices + 6 << '\n';
+        file << "f " << numVertices + 5 << ' ' << numVertices + 7 << ' ' << numVertices + 8 << '\n';
+
+        // Left face
+        file << "f " << numVertices + 1 << ' ' << numVertices + 8 << ' ' << numVertices + 5 << '\n';
+        file << "f " << numVertices + 1 << ' ' << numVertices + 8 << ' ' << numVertices + 4 << '\n';
+
+        // Top face
+        file << "f " << numVertices + 3 << ' ' << numVertices + 8 << ' ' << numVertices + 4 << '\n';
+        file << "f " << numVertices + 3 << ' ' << numVertices + 8 << ' ' << numVertices + 7 << '\n';
+
+        // Bottom face
+        file << "f " << numVertices + 1 << ' ' << numVertices + 6 << ' ' << numVertices + 2 << '\n';
+        file << "f " << numVertices + 1 << ' ' << numVertices + 6 << ' ' << numVertices + 5 << '\n';
 
         file << "\n\n\n";
-        numFaces += 8;
+        numVertices += 8;
+
     }
 
     for(int i = 0; i < 8; i++){
         OctreeNode *child = currNode->getChildren(i);
-        if(child) traverseRecursive(child, file, numFaces);
+        if(child) traverseRecursively(child, file, numVertices);
     }
 
 }

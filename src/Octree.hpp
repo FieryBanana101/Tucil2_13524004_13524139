@@ -47,6 +47,6 @@ public:
 
     OctreeNode *getRoot() const;
     static Octree *build(float voxelSize, vector<Vector3>& vertices, vector<Vector3>& faceIndexes);
-    static void buildRecursive(OctreeNode *currNode, float voxelSize, vector<Vector3>& vertices, vector<Vector3>& faceIndexes);
-    static void traverseRecursive(OctreeNode *currNode, ofstream &file, int &numFaces);
+    static void buildRecursively(OctreeNode *currNode, float voxelSize, vector<Vector3>& vertices, vector<Vector3>& faceIndexes);
+    static void traverseRecursively(OctreeNode *currNode, ofstream &file, int &numVertices);
 };

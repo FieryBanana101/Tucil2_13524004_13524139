@@ -44,7 +44,7 @@ void ObjParser::serialize(const std::string& filename, const Octree *tree) {
     }
 
     int numFaces = 0;
-    Octree::traverseRecursive(tree->getRoot(), file, numFaces);
-    cout << "Successfully converted octree to .obj file with " << numFaces << " Faces\n";
+    Octree::traverseRecursively(tree->getRoot(), file, numFaces);
+    cout << "Successfully converted octree to .obj file with " << numFaces << " Vertices\n";
 
 }
