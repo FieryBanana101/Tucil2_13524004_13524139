@@ -37,7 +37,7 @@ public:
     OctreeNodeType getType() const { return nodeType; }
     OctreeNode* const* getChildren() const { return children; }
     OctreeNode *getChildren(uint8_t idx) const { return children[idx]; }
-    AABB getBoundingBox() const { return boundingBox; }
+    AABB &getBoundingBox() { return boundingBox; }
     void setChildren(uint8_t idx, OctreeNode *child){ children[idx] = child; }
     void setType(OctreeNodeType type){ nodeType = type; }
 };
@@ -52,7 +52,7 @@ private:
     int verticesNum;
     int facesNum;
 
-    static void buildRecursively(
+    void buildRecursively(
         OctreeNode *currNode, 
         int currDepth, 
         vector<Vector3>& vertices, 
@@ -62,7 +62,7 @@ private:
 
 
     template <typename Func>
-    static void traverseRecursively(OctreeNode *currNode, int currDepth, Func&& func){
+    void traverseRecursively(OctreeNode *currNode, int currDepth, Func&& func){
 
         forward<Func>(func)(currNode, currDepth);
 
@@ -77,13 +77,12 @@ private:
 
 
 public:
-    Octree(int maxDepth) : 
-        maxDepth(maxDepth), 
-        voxelNum(0), 
-        verticesNum(0), 
-        facesNum(0)
-        {};
 
+    /*  Construct octree with a predetermined max depth (more max depth = more detailed voxelization),
+     *  tree is constructed from the list of vertices and mesh triangles (faces) which are described by 3-tuple indexes.
+     *  The construction duration can be shown using the bool in the last constructor parameter.
+     */
+    Octree(const int maxDepth, vector<Vector3> vertices, vector<Vector3> faceIndexes, const bool showDuration);
     ~Octree(){ delete root; };
 
     OctreeNode *getRoot() const { return root; }
@@ -98,13 +97,7 @@ public:
     void incVerticesNum() { verticesNum++; }
     void incFacesNum() { facesNum++; }
 
-    static Octree *build(
-        int maxDepth, 
-        vector<Vector3>& vertices, 
-        vector<Vector3>& faceIndexes,
-        bool showDuration
-    );
-    static void printStatistic(const Octree *octree, const bool isVerbose);
+    void printStatistic(const bool isVerbose);
 
 
     /* General purpose DFS to traverse octree and call a lambda function on each node,
@@ -124,7 +117,7 @@ public:
      * });
      */
     template <typename Func>
-    static void traverse(const Octree *octree, Func&& func){
-        traverseRecursively(octree->root, 0, func);
+    void traverse(Func&& func){
+        traverseRecursively(root, 0, func);
     }
 };

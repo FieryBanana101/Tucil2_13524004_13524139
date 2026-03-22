@@ -62,7 +62,7 @@ void ObjParser::parse(const std::string& filepath, const bool showDuration, vect
 
 
 
-void ObjParser::serialize(const Octree *tree, const std::string& filepath, const bool showDuration) {
+void ObjParser::serialize(Octree *octree, const std::string& filepath, const bool showDuration) {
 
     chrono::steady_clock::time_point start, end;
     std::ofstream file(filepath);
@@ -77,7 +77,7 @@ void ObjParser::serialize(const Octree *tree, const std::string& filepath, const
     }
     
     int numVertices = 0, numVoxels = 0;
-    Octree::traverse(tree, 
+    octree->traverse(
     
     [&numVertices, &numVoxels, &file](OctreeNode *currNode, int currDepth){
 

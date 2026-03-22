@@ -16,7 +16,7 @@ class ObjParser {
         );
 
         static void serialize(
-            const Octree *tree, 
+            Octree *octree, 
             const std::string& filepath, 
             bool showDuration
         );

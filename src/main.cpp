@@ -23,8 +23,8 @@ int main(void) {
     vector<Vector3> vertices, faceIndexes;
     ObjParser::parse(sourcePath, showParseDuration, vertices, faceIndexes);
 
-    Octree *octree = Octree::build(maxDepth, vertices, faceIndexes, showBuildDuration);
-    Octree::printStatistic(octree, showVerboseStats);
+    Octree *octree = new Octree(maxDepth, vertices, faceIndexes, showBuildDuration);
+    octree->printStatistic(showVerboseStats);
 
     ObjParser::serialize(octree, resultPath, showSerializeDuration);
 }

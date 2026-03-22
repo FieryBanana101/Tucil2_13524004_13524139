@@ -3,7 +3,13 @@
 #include <iostream>
 #include <chrono>
 
-Octree *Octree::build(int maxDepth, vector<Vector3>& vertices, vector<Vector3>& faceIndexes, bool showDuration){
+Octree::Octree(
+    const int maxDepth, 
+    vector<Vector3> vertices, 
+    vector<Vector3> faceIndexes, 
+    const bool showDuration
+) : maxDepth(maxDepth), voxelNum(0), verticesNum(0), facesNum(0)
+{
 
     cout << "Building octree from a mesh with " << vertices.size() << " vertices and " << faceIndexes.size() << " faces...\n";
     chrono::steady_clock::time_point start, end;
@@ -28,16 +34,14 @@ Octree *Octree::build(int maxDepth, vector<Vector3>& vertices, vector<Vector3>& 
        globalBoundingBox.max.z = max(globalBoundingBox.max.z, vertex.z);
     }
 
-    Octree *octree = new Octree(maxDepth);
-    octree->root = new OctreeNode(globalBoundingBox);
-    octree->root->setType(OCTREE_NON_LEAF);
-    buildRecursively(octree->root, 0, vertices, faceIndexes, octree);
+    root = new OctreeNode(globalBoundingBox);
+    root->setType(OCTREE_NON_LEAF);
+    buildRecursively(root, 0, vertices, faceIndexes, this);
 
     // Due to the naive way we serialize each voxel, this will be as simple as this, 
     // unless there is some kind of optimization on serializing the voxel into vertices and faces
-    int voxelNum = octree->getVoxelNum();
-    octree->setFacesNum(voxelNum * 12);
-    octree->setVerticesNum(voxelNum * 8);
+    facesNum = voxelNum * 12;
+    verticesNum = voxelNum * 8;
 
 
     // Record end time and show build duration if needed
@@ -56,7 +60,6 @@ Octree *Octree::build(int maxDepth, vector<Vector3>& vertices, vector<Vector3>& 
 
     }
 
-    return octree;
 }
 
 
@@ -126,15 +129,13 @@ void Octree::buildRecursively(
 
 
 
-void Octree::printStatistic(const Octree *octree, const bool isVerbose) {
-
-    int maxDepth = octree->getMaxDepth();
+void Octree::printStatistic(const bool isVerbose) {
 
     cout << "\n========================================= OCTREE STATISTICS ========================================\n";
     cout << "Octree max depth: " << maxDepth << '\n';
-    cout << "Number of voxel formed: " << octree->getVoxelNum() << '\n';
-    cout << "Total number of vertices: " << octree->getVerticesNum() << '\n';
-    cout << "Total number of faces: " << octree->getFacesNum() << '\n';
+    cout << "Number of voxel formed: " << voxelNum << '\n';
+    cout << "Total number of vertices: " << verticesNum << '\n';
+    cout << "Total number of faces: " << facesNum << '\n';
 
     if(isVerbose){ 
         cout << "\nOctree Structure: \n";
@@ -146,8 +147,8 @@ void Octree::printStatistic(const Octree *octree, const bool isVerbose) {
     vector<int> nodeStats(maxDepth);
     vector<int> emptyLeafStats(maxDepth);
     int nodeIdx = 1;
-    Octree::traverse(octree, 
     
+    traverse(
     [&nodeStats, &emptyLeafStats, &nodeIdx, isVerbose](OctreeNode *currNode, int currDepth){
 
         // Add extra information if verbosity is enabled
