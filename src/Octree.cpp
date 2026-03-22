@@ -3,32 +3,6 @@
 #include <iostream>
 
 
-OctreeNodeType OctreeNode::getType() const {
-    return nodeType;
-}
-
-void OctreeNode::setType(OctreeNodeType type){
-    nodeType = type;
-}
-
-OctreeNode *OctreeNode::getChildren(uint8_t idx) const {
-    return children[idx];
-}
-
-void OctreeNode::setChildren(uint8_t idx, OctreeNode *child){
-    children[idx] = child;
-}
-
-
-AABB OctreeNode::getBoundingBox() const {
-    return boundingBox;
-}
-
-
-OctreeNode *Octree::getRoot() const {
-    return root;
-}
-
 Octree *Octree::build(int maxDepth, vector<Vector3>& vertices, vector<Vector3>& faceIndexes){
     AABB globalBoundingBox(
         Vector3(std::numeric_limits<float>::max()), 
@@ -47,13 +21,27 @@ Octree *Octree::build(int maxDepth, vector<Vector3>& vertices, vector<Vector3>& 
 
     Octree *octree = new Octree(maxDepth);
     octree->root = new OctreeNode(globalBoundingBox);
-    buildRecursively(octree->root, 0, maxDepth, vertices, faceIndexes);
+    // octree->root->setType(OCTREE_NON_LEAF);
+    buildRecursively(octree->root, 0, vertices, faceIndexes, octree);
+
+    // Due to the naive way we serialize each voxel, this will be as simple as this, 
+    // unless there is some kind of optimization on serializing the voxel into vertices and faces
+    int voxelNum = octree->getVoxelNum();
+    octree->setFacesNum(voxelNum * 12);
+    octree->setVerticesNum(voxelNum * 8);
 
     return octree;
 }
 
 
-void Octree::buildRecursively(OctreeNode *currNode, int currDepth, int maxDepth, vector<Vector3>& vertices, vector<Vector3>& faceIndexes) {
+
+void Octree::buildRecursively(
+    OctreeNode *currNode, 
+    int currDepth, 
+    vector<Vector3>& vertices, 
+    vector<Vector3>& faceIndexes, 
+    Octree *octree
+){
 
     AABB currBoundingBox = currNode->getBoundingBox();
     Vector3 center = currBoundingBox.getCenter();
@@ -98,19 +86,24 @@ void Octree::buildRecursively(OctreeNode *currNode, int currDepth, int maxDepth,
         if(regionFaceIndexes.empty()){
             child->setType(OCTREE_EMPTY_LEAF);
         }
-        else if(currDepth + 1 >= maxDepth){
+        else if(currDepth + 1 >= octree->getMaxDepth()){
             child->setType(OCTREE_FILLED_LEAF);
+            octree->incVoxelNum();
         }
         else {
             child->setType(OCTREE_NON_LEAF);
-            buildRecursively(child, currDepth + 1, maxDepth, vertices, regionFaceIndexes);
+            buildRecursively(child, currDepth + 1, vertices, regionFaceIndexes, octree);
         }
     }
 }
 
 
 
-void Octree::traverseRecursively(OctreeNode *currNode, ofstream &file, int &numVertices){
+void Octree::serializeRecursively(
+    OctreeNode *currNode, 
+    ofstream &file, 
+    int &numVertices
+){
 
     if(currNode->getType() == OCTREE_FILLED_LEAF){
 
@@ -178,7 +171,7 @@ void Octree::traverseRecursively(OctreeNode *currNode, ofstream &file, int &numV
 
     for(int i = 0; i < 8; i++){
         OctreeNode *child = currNode->getChildren(i);
-        if(child) traverseRecursively(child, file, numVertices);
+        if(child) serializeRecursively(child, file, numVertices);
     }
 
 }
