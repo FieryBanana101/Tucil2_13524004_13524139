@@ -29,8 +29,7 @@ OctreeNode *Octree::getRoot() const {
     return root;
 }
 
-Octree *Octree::build(float voxelSize, vector<Vector3>& vertices, vector<Vector3>& faceIndexes){
-    
+Octree *Octree::build(int maxDepth, vector<Vector3>& vertices, vector<Vector3>& faceIndexes){
     AABB globalBoundingBox(
         Vector3(std::numeric_limits<float>::max()), 
         Vector3(std::numeric_limits<float>::min())
@@ -46,25 +45,23 @@ Octree *Octree::build(float voxelSize, vector<Vector3>& vertices, vector<Vector3
        globalBoundingBox.max.z = max(globalBoundingBox.max.z, vertex.z);
     }
 
-    Octree *octree = new Octree(voxelSize);
+    Octree *octree = new Octree(maxDepth);
     octree->root = new OctreeNode(globalBoundingBox);
-    buildRecursively(octree->root, voxelSize, vertices, faceIndexes);
+    buildRecursively(octree->root, 0, maxDepth, vertices, faceIndexes);
 
     return octree;
 }
 
 
-void Octree::buildRecursively(OctreeNode *currNode, float voxelSize, vector<Vector3>& vertices, vector<Vector3>& faceIndexes) {
+void Octree::buildRecursively(OctreeNode *currNode, int currDepth, int maxDepth, vector<Vector3>& vertices, vector<Vector3>& faceIndexes) {
 
     AABB currBoundingBox = currNode->getBoundingBox();
     Vector3 center = currBoundingBox.getCenter();
     Vector3 distToCenter = center - currBoundingBox.min;
-    
     int childIdx = 0;
     for(int xScale = 0; xScale <= 1; xScale++){
         for(int yScale = 0; yScale <= 1; yScale++){
             for(int zScale = 0; zScale <= 1; zScale++){
-                
                 Vector3 aabbMin = Vector3(
                     currBoundingBox.min.x + distToCenter.x * xScale,
                     currBoundingBox.min.y + distToCenter.y * yScale,
@@ -78,45 +75,37 @@ void Octree::buildRecursively(OctreeNode *currNode, float voxelSize, vector<Vect
 
                 currNode->setChildren(childIdx, childNode);
                 childIdx++;
-
             }
         }
     }
-
 
     for(int i = 0; i < 8; i++){
         OctreeNode *child = currNode->getChildren(i);
         AABB boundingBox = child->getBoundingBox();
 
-        if(boundingBox.getVolume() <= voxelSize){
-            child->setType(OCTREE_FILLED_LEAF);
-            continue;
-        }
-
         vector<Vector3> regionFaceIndexes;
         for(Vector3 faceIndex : faceIndexes){
-            
             Triangle triangle = Triangle(
                 Vector3(vertices[static_cast<int>(faceIndex.x)]),
                 Vector3(vertices[static_cast<int>(faceIndex.y)]),
                 Vector3(vertices[static_cast<int>(faceIndex.z)])
             );
-
             if(boundingBox.intersect(triangle)){
                 regionFaceIndexes.push_back(faceIndex);
             }
-            
         }
 
         if(regionFaceIndexes.empty()){
             child->setType(OCTREE_EMPTY_LEAF);
         }
+        else if(currDepth + 1 >= maxDepth){
+            child->setType(OCTREE_FILLED_LEAF);
+        }
         else {
             child->setType(OCTREE_NON_LEAF);
-            buildRecursively(child, voxelSize, vertices, regionFaceIndexes);
+            buildRecursively(child, currDepth + 1, maxDepth, vertices, regionFaceIndexes);
         }
     }
-   
 }
 
 

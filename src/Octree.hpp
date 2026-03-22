@@ -23,7 +23,7 @@ private:
 
 
 public:
-    OctreeNode(AABB boundingBox) : boundingBox(boundingBox) { for(int i = 0; i < 8; i++) children[i] = nullptr; };
+    OctreeNode(AABB boundingBox) : boundingBox(boundingBox), nodeType(OCTREE_EMPTY_LEAF) { for(int i = 0; i < 8; i++) children[i] = nullptr; };
     ~OctreeNode(){ for(int i = 0; i < 8; i++) delete children[i]; };
 
     OctreeNode **getChildren() const;
@@ -39,14 +39,14 @@ public:
 class Octree {
 private:
     OctreeNode *root;
-    uint32_t voxelSize;
+    int maxDepth;
 
 public:
-    Octree(uint32_t voxelSize) : voxelSize(voxelSize) {};
+    Octree(int maxDepth) : maxDepth(maxDepth) {};
     ~Octree(){ delete root; };
 
     OctreeNode *getRoot() const;
-    static Octree *build(float voxelSize, vector<Vector3>& vertices, vector<Vector3>& faceIndexes);
-    static void buildRecursively(OctreeNode *currNode, float voxelSize, vector<Vector3>& vertices, vector<Vector3>& faceIndexes);
+    static Octree *build(int maxDepth, vector<Vector3>& vertices, vector<Vector3>& faceIndexes);
+    static void buildRecursively(OctreeNode *currNode, int currDepth, int maxDepth, vector<Vector3>& vertices, vector<Vector3>& faceIndexes);
     static void traverseRecursively(OctreeNode *currNode, ofstream &file, int &numVertices);
 };
