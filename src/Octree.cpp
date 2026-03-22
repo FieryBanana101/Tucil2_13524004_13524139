@@ -1,13 +1,22 @@
 #include "Octree.hpp"
 #include <limits>
 #include <iostream>
+#include <chrono>
 
+Octree *Octree::build(int maxDepth, vector<Vector3>& vertices, vector<Vector3>& faceIndexes, bool showDuration){
 
-Octree *Octree::build(int maxDepth, vector<Vector3>& vertices, vector<Vector3>& faceIndexes){
+    cout << "Building octree from a mesh with " << vertices.size() << " vertices and " << faceIndexes.size() << " faces...\n";
+    chrono::steady_clock::time_point start, end;
+
     AABB globalBoundingBox(
         Vector3(std::numeric_limits<float>::max()), 
         Vector3(std::numeric_limits<float>::min())
     );
+
+    // Record build start time if needed
+    if(showDuration){
+        start = chrono::steady_clock::now();
+    }
 
     for(Vector3 vertex : vertices){
        globalBoundingBox.min.x = min(globalBoundingBox.min.x, vertex.x);
@@ -29,6 +38,23 @@ Octree *Octree::build(int maxDepth, vector<Vector3>& vertices, vector<Vector3>& 
     int voxelNum = octree->getVoxelNum();
     octree->setFacesNum(voxelNum * 12);
     octree->setVerticesNum(voxelNum * 8);
+
+
+    // Record end time and show build duration if needed
+    if(showDuration){
+
+        end = chrono::steady_clock::now();
+        chrono::milliseconds::rep duration = chrono::duration_cast<chrono::milliseconds>(end - start).count();
+
+        string durationUnit = (duration >= 1000 ? "s" : "ms");
+        if(durationUnit == "ms"){
+            cout << "[Finished building octree in "  << duration << ' ' << "ms]\n\n";
+        }
+        else{
+            cout << "[Finished building octree in "  << static_cast<float>(duration) / 1000 << ' ' << "s]\n\n";
+        }
+
+    }
 
     return octree;
 }
@@ -95,4 +121,79 @@ void Octree::buildRecursively(
             buildRecursively(child, currDepth + 1, vertices, regionFaceIndexes, octree);
         }
     }
+}
+
+
+
+
+void Octree::printStatistic(const Octree *octree, const bool isVerbose) {
+
+    int maxDepth = octree->getMaxDepth();
+
+    cout << "\n========================================= OCTREE STATISTICS ========================================\n";
+    cout << "Octree max depth: " << maxDepth << '\n';
+    cout << "Number of voxel formed: " << octree->getVoxelNum() << '\n';
+    cout << "Total number of vertices: " << octree->getVerticesNum() << '\n';
+    cout << "Total number of faces: " << octree->getFacesNum() << '\n';
+
+    if(isVerbose){ 
+        cout << "\nOctree Structure: \n";
+        for(int i = 0; i < 100; i++) cout << '-'; 
+        cout << '\n'; 
+    }
+
+    // Do DFS to acquire needed statistics
+    vector<int> nodeStats(maxDepth);
+    vector<int> emptyLeafStats(maxDepth);
+    int nodeIdx = 1;
+    Octree::traverse(octree, 
+    
+    [&nodeStats, &emptyLeafStats, &nodeIdx, isVerbose](OctreeNode *currNode, int currDepth){
+
+        // Add extra information if verbosity is enabled
+        if(isVerbose){
+            cout << '|';
+            for(int i = 0; i < currDepth + 1; i++) cout << "--";
+
+            string nodeTypeStr;
+            switch(currNode->getType()){
+                case OCTREE_EMPTY_LEAF:
+                    nodeTypeStr = "NON-INTERSECTING LEAF";
+                    break;
+                case OCTREE_FILLED_LEAF:
+                    nodeTypeStr = "INTERSECTING LEAF";
+                    break;
+                default:
+                    nodeTypeStr = "INTERNAL";
+            }
+
+            cout << " Node " << nodeIdx++ << " (Depth = " << currDepth;
+            cout << ", Bounding box volume = " << currNode->getBoundingBox().getVolume();
+            cout << ", type = " << nodeTypeStr << ")\n";
+        }
+
+        nodeStats[currDepth]++;
+        if(currNode->getType() == OCTREE_EMPTY_LEAF){
+            emptyLeafStats[currDepth]++;
+        }
+
+    });
+
+    if(isVerbose){ 
+        for(int i = 0; i < 100; i++) cout << '-'; 
+        cout << '\n'; 
+    }
+
+
+    cout << "Nodes count based on depth: \n";
+    for(int i = 0; i < maxDepth; i++){
+        cout << "   " << i + 1 << ": " << nodeStats[i] << " Nodes\n";
+    }
+
+    cout << "Skipped nodes (AKA leaf nodes which does not intersect with any mesh face) count based on depth: \n";
+    for(int i = 0; i < maxDepth; i++){
+        cout << "   " << i + 1 << ": " << emptyLeafStats[i] << " Nodes\n";
+    }
+
+    cout << "===================================================================================================\n\n";
 }

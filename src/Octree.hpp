@@ -98,8 +98,14 @@ public:
     void incVerticesNum() { verticesNum++; }
     void incFacesNum() { facesNum++; }
 
-    static Octree *build(int maxDepth, vector<Vector3>& vertices, vector<Vector3>& faceIndexes);
-    
+    static Octree *build(
+        int maxDepth, 
+        vector<Vector3>& vertices, 
+        vector<Vector3>& faceIndexes,
+        bool showDuration
+    );
+    static void printStatistic(const Octree *octree, const bool isVerbose);
+
 
     /* General purpose DFS to traverse octree and call a lambda function on each node,
      * The lambda function must accept two parameter with signature (OctreeNode *, int),
@@ -107,7 +113,9 @@ public:
      * Example usage,
      * 
      * vector<float> volumeList;
-     * Octree::traverse(octree, [&volumeList](OctreeNode *currNode, int currDepth){
+     * Octree::traverse(octree, 
+     * 
+     * [&volumeList](OctreeNode *currNode, int currDepth){
      *      float volume = currNode->getBoundingBox().getVolume();
      *      volumeList.push_back(volume);
      *      cout << "Volume is " <<  volume << '\n';  

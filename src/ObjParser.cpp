@@ -2,16 +2,25 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <chrono>
 using namespace std;
 
-void ObjParser::parse(const std::string& filename, vector<Vector3>& vertices, vector<Vector3>& faceIndexes) {
-    ifstream file(filename);
+void ObjParser::parse(const std::string& filepath, const bool showDuration, vector<Vector3>& vertices, vector<Vector3>& faceIndexes) {
+
+    chrono::steady_clock::time_point start, end;
+    ifstream file(filepath);
     string line;
 
     if (!file.is_open()) {
-        throw runtime_error("Input obj file " + filename + " cannot be opened.");
+        throw runtime_error("Input obj file " + filepath + " cannot be opened.");
     }
 
+    // Record start time if needed
+    if(showDuration){
+        start = chrono::steady_clock::now();
+    }
+
+    // TODO: more error handling here
     while(getline(file, line)) {
         stringstream ss(line);
         string type;
@@ -29,23 +38,48 @@ void ObjParser::parse(const std::string& filename, vector<Vector3>& vertices, ve
     }
 
     if(faceIndexes.empty()) {
-        throw runtime_error(filename + " does not contain any triangles.");
+        throw runtime_error("Mesh described in '" + filepath + "' does not contain any triangles/faces.");
+    }
+
+    cout << "Successfully parsed mesh in .obj file located at '" << filepath << "'\n";
+
+    // Record end time and show duration if needed
+    if(showDuration){
+
+        end = chrono::steady_clock::now();
+        chrono::milliseconds::rep duration = chrono::duration_cast<chrono::milliseconds>(end - start).count();
+        
+        string durationUnit = (duration >= 1000 ? "s" : "ms");
+        if(durationUnit == "ms"){
+            cout << "[Finished parsing .obj file in "  << duration << ' ' << "ms]\n\n";
+        }
+        else{
+            cout << "[Finished parsing .obj file in "  << static_cast<float>(duration) / 1000 << ' ' << "s]\n\n";
+        }
+        
     }
 }
 
 
 
-void ObjParser::serialize(const std::string& filename, const Octree *tree) {
-    
-    std::ofstream file(filename);
+void ObjParser::serialize(const Octree *tree, const std::string& filepath, const bool showDuration) {
+
+    chrono::steady_clock::time_point start, end;
+    std::ofstream file(filepath);
 
     if(!file.is_open()){
-        throw runtime_error("Output obj file " + filename + " cannot be opened.");
+        throw runtime_error("Output obj file '" + filepath + "' cannot be opened.");
     }
-
-
-    int numVertices = 0;
-    Octree::traverse(tree, [&numVertices, &file](OctreeNode *currNode, int currDepth){
+    
+    // Record start time if needed
+    if(showDuration){
+        start = chrono::steady_clock::now();
+    }
+    
+    int numVertices = 0, numVoxels = 0;
+    Octree::traverse(tree, 
+    
+    [&numVertices, &numVoxels, &file](OctreeNode *currNode, int currDepth){
 
         (void) currDepth;
         if(currNode->getType() == OCTREE_FILLED_LEAF){
@@ -72,7 +106,7 @@ void ObjParser::serialize(const std::string& filename, const Octree *tree) {
             v6 = Vector3(boundingBox.max.x, boundingBox.max.y, boundingBox.max.z);
             v7 = Vector3(boundingBox.min.x, boundingBox.max.y, boundingBox.max.z);
 
-            file << "# Octree node\n";
+            file << "# Octree node " << ++numVoxels << '\n';
             file << "v " << v0.x << ' ' << v0.y << ' ' << v0.z << '\n';
             file << "v " << v1.x << ' ' << v1.y << ' ' << v1.z << '\n';
             file << "v " << v2.x << ' ' << v2.y << ' ' << v2.z << '\n';
@@ -111,4 +145,22 @@ void ObjParser::serialize(const std::string& filename, const Octree *tree) {
         }
 
     });
+
+    cout << "Voxelized mesh successfully saved at '" << filepath << "'\n";
+
+    // Record end time and show duration if needed
+    if(showDuration){
+
+        end = chrono::steady_clock::now();
+        chrono::milliseconds::rep duration = chrono::duration_cast<chrono::milliseconds>(end - start).count();
+        
+        string durationUnit = (duration >= 1000 ? "s" : "ms");
+        if(durationUnit == "ms"){
+            cout << "[Finished serializing octree into .obj file in "  << duration << ' ' << "ms]\n\n";
+        }
+        else{
+            cout << "[Finished serializing octree into .obj file in "  << static_cast<float>(duration) / 1000 << ' ' << "s]\n\n";
+        }
+        
+    }
 }
