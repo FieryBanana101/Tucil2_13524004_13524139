@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <vector>
 #include <fstream>
+#include <utility> // std::forward<>
 
 using namespace std;
 
@@ -60,6 +61,21 @@ private:
     );
 
 
+    template <typename Func>
+    static void traverseRecursively(OctreeNode *currNode, int currDepth, Func&& func){
+
+        forward<Func>(func)(currNode, currDepth);
+
+        for(int i = 0; i < 8; i++){
+            OctreeNode *child = currNode->getChildren(i);
+            if(child != nullptr){
+                traverseRecursively(child, currDepth + 1, func);
+            }
+        }
+
+    }
+
+
 public:
     Octree(int maxDepth) : 
         maxDepth(maxDepth), 
@@ -83,9 +99,24 @@ public:
     void incFacesNum() { facesNum++; }
 
     static Octree *build(int maxDepth, vector<Vector3>& vertices, vector<Vector3>& faceIndexes);
-    static void serializeRecursively(
-        OctreeNode *currNode, 
-        ofstream &file, 
-        int &numVertices
-    );
+    
+
+    /* General purpose DFS to traverse octree and call a lambda function on each node,
+     * The lambda function must accept two parameter with signature (OctreeNode *, int),
+     *
+     * Example usage,
+     * 
+     * vector<float> volumeList;
+     * Octree::traverse(octree, [&volumeList](OctreeNode *currNode, int currDepth){
+     *      float volume = currNode->getBoundingBox().getVolume();
+     *      volumeList.push_back(volume);
+     *      cout << "Volume is " <<  volume << '\n';  
+     * 
+     *      (void) currDepth;
+     * });
+     */
+    template <typename Func>
+    static void traverse(const Octree *octree, Func&& func){
+        traverseRecursively(octree->root, 0, func);
+    }
 };
