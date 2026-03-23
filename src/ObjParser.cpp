@@ -51,11 +51,12 @@ void ObjParser::parse(const std::string& filepath, const bool showDuration, vect
         
         string durationUnit = (duration >= 1000 ? "s" : "ms");
         if(durationUnit == "ms"){
-            cout << "[Finished parsing .obj file in "  << duration << ' ' << "ms]\n\n";
+            cout << "[Finished parsing .obj file in "  << duration << " ms]";
         }
         else{
-            cout << "[Finished parsing .obj file in "  << static_cast<float>(duration) / 1000 << ' ' << "s]\n\n";
+            cout << "[Finished parsing .obj file in "  << static_cast<float>(duration) / 1000 << " s]";
         }
+        cout << "\n\n";
         
     }
 }
@@ -83,7 +84,7 @@ void ObjParser::serialize(Octree *octree, const std::string& filepath, const boo
 
         (void) currDepth;
         if(currNode->getType() == OCTREE_FILLED_LEAF){
-            AABB boundingBox = currNode->getBoundingBox();
+            AABB &boundingBox = currNode->getBoundingBox();
 
             /*
                 Cube subdivision viewed from the face such that bottom-left-front is the min vertex,
@@ -156,11 +157,14 @@ void ObjParser::serialize(Octree *octree, const std::string& filepath, const boo
         
         string durationUnit = (duration >= 1000 ? "s" : "ms");
         if(durationUnit == "ms"){
-            cout << "[Finished serializing octree into .obj file in "  << duration << ' ' << "ms]\n\n";
+            cout << "[Finished serializing octree into .obj file in "  << duration << " ms ";
+            cout << '(' << OctreeBuilder::getMaxThreads() << " threads used)]";
         }
         else{
-            cout << "[Finished serializing octree into .obj file in "  << static_cast<float>(duration) / 1000 << ' ' << "s]\n\n";
+            cout << "[Finished serializing octree into .obj file in "  << static_cast<float>(duration) / 1000 << " s ";
+            cout << '(' << OctreeBuilder::getMaxThreads() << " threads used)]";
         }
+        cout << "\n\n";
         
     }
 }

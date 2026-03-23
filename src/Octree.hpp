@@ -7,6 +7,8 @@
 #include <vector>
 #include <fstream>
 #include <utility> // std::forward<>
+#include <stack>
+#include <mutex>
 
 using namespace std;
 
@@ -60,7 +62,6 @@ private:
         Octree *octree
     );
 
-
     template <typename Func>
     void traverseRecursively(OctreeNode *currNode, int currDepth, Func&& func){
 
@@ -98,6 +99,7 @@ public:
     void incFacesNum() { facesNum++; }
 
     void printStatistic(const bool isVerbose);
+    static void threadWorkerTask(vector<Vector3> &vertices, vector<Vector3> &faceIndexes, Octree *octree);
 
 
     /* General purpose DFS to traverse octree and call a lambda function on each node,
@@ -120,4 +122,25 @@ public:
     void traverse(Func&& func){
         traverseRecursively(root, 0, func);
     }
+};
+
+
+
+class OctreeBuilder {
+
+private:
+    static int maxThreadUsed;
+    static stack<pair<OctreeNode *, int>> taskStack;
+    static int activeThreads;
+    static mutex stackLock, counterLock;
+
+public:
+    static int getMaxThreads();
+    static void setMaxThreads(int numThreads);
+    static int getActiveThreads();
+    static int incActiveThreads();
+    static int decActiveThreads();
+    static pair<OctreeNode *, int> popTask();
+    static void pushTask(OctreeNode *currNode, int currDepth);
+    
 };

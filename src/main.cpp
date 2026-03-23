@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <chrono>
+#include <thread>
 #include "ObjParser.hpp"
 #include "Triangle.hpp"
 #include "AABB.hpp"
@@ -8,21 +9,38 @@
 
 using namespace std;
 
-int main(void) {
 
-    /* Modify these variable for testing, TODO: these value should came from user interaction (preferably GUI?)*/
-    const string sourcePath = "test/line.obj", resultPath = "test/result.obj";
-    const int maxDepth = 10;
+/* Global thread state for concurrency and synchronization, defined in static class OctreeBuilder */
+int                             OctreeBuilder::maxThreadUsed;
+stack<pair<OctreeNode *, int>>  OctreeBuilder::taskStack;
+int                             OctreeBuilder::activeThreads;
+mutex                           OctreeBuilder::stackLock, OctreeBuilder::counterLock;
+
+
+int main(void){
+
+    /* Modify these variable for testing, TODO: these value should came from user interaction (preferably GUI?) */
+
+    const string 
+        sourcePath = "test/cow.obj",
+        resultPath = "test/result.obj";
     const bool 
         showParseDuration = true,
         showBuildDuration = true,
         showSerializeDuration = true,
-        showVerboseStats = true;
+        showVerboseStats = false,
+        maximizeConcurrency = false;
+    const int 
+        maxDepth = 7,
+        threadsNumChoice = 8;  // Ignored when (maximizeConcurrency == true)
+
     /******************************************************************************/
+
+    OctreeBuilder::setMaxThreads((maximizeConcurrency ? thread::hardware_concurrency() : threadsNumChoice));
 
     vector<Vector3> vertices, faceIndexes;
     ObjParser::parse(sourcePath, showParseDuration, vertices, faceIndexes);
-
+    
     Octree *octree = new Octree(maxDepth, vertices, faceIndexes, showBuildDuration);
     octree->printStatistic(showVerboseStats);
 

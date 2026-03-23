@@ -2,6 +2,58 @@
 #include <limits>
 #include <iostream>
 #include <chrono>
+#include <thread>
+
+int OctreeBuilder::getMaxThreads(){
+    return maxThreadUsed;
+}
+
+void OctreeBuilder::setMaxThreads(int numThreads){
+    maxThreadUsed = numThreads;
+}
+
+int OctreeBuilder::getActiveThreads(){
+    counterLock.lock();
+    int ret = activeThreads;
+    counterLock.unlock();
+    return ret;
+}
+
+int OctreeBuilder::incActiveThreads(){
+    counterLock.lock();
+    int ret = ++activeThreads;
+    counterLock.unlock();
+    return ret;
+}
+
+int OctreeBuilder::decActiveThreads(){
+    counterLock.lock();
+    int ret = (activeThreads > 0 ? --activeThreads : 0);
+    counterLock.unlock();
+    return ret;
+}
+
+pair<OctreeNode *, int> OctreeBuilder::popTask(){
+    stackLock.lock();
+    pair<OctreeNode *, int> ret;
+    if(taskStack.empty()){
+        ret = pair<OctreeNode *, int>(nullptr, 0);
+    }
+    else{
+        ret = taskStack.top();
+        taskStack.pop();
+    }
+    stackLock.unlock();
+    return ret;
+}
+
+void OctreeBuilder::pushTask(OctreeNode *currNode, int currDepth){
+    stackLock.lock();
+    taskStack.push(make_pair(currNode, currDepth));
+    stackLock.unlock();
+}
+
+
 
 Octree::Octree(
     const int maxDepth, 
@@ -36,8 +88,19 @@ Octree::Octree(
 
     root = new OctreeNode(globalBoundingBox);
     root->setType(OCTREE_NON_LEAF);
-    buildRecursively(root, 0, vertices, faceIndexes, this);
 
+    OctreeBuilder::pushTask(root, 0);
+    int maxThreadCount = OctreeBuilder::getMaxThreads();
+    thread threads[maxThreadCount];
+
+    for(int i = 0; i < maxThreadCount; i++){
+        threads[i] = thread(threadWorkerTask, ref(vertices), ref(faceIndexes), this);
+    }
+
+    for(int i = 0; i < maxThreadCount; i++){
+        threads[i].join();
+    }
+    
     // Due to the naive way we serialize each voxel, this will be as simple as this, 
     // unless there is some kind of optimization on serializing the voxel into vertices and faces
     facesNum = voxelNum * 12;
@@ -52,11 +115,14 @@ Octree::Octree(
 
         string durationUnit = (duration >= 1000 ? "s" : "ms");
         if(durationUnit == "ms"){
-            cout << "[Finished building octree in "  << duration << ' ' << "ms]\n\n";
+            cout << "[Finished building octree in "  << duration << " ms ";
+            cout << '(' << OctreeBuilder::getMaxThreads() << " threads used)]";
         }
         else{
-            cout << "[Finished building octree in "  << static_cast<float>(duration) / 1000 << ' ' << "s]\n\n";
+            cout << "[Finished building octree in "  << static_cast<float>(duration) / 1000 << " s ";
+            cout << '(' << OctreeBuilder::getMaxThreads() << " threads used)]";
         }
+        cout << "\n\n";
 
     }
 
@@ -71,8 +137,7 @@ void Octree::buildRecursively(
     vector<Vector3>& faceIndexes, 
     Octree *octree
 ){
-
-    AABB currBoundingBox = currNode->getBoundingBox();
+    AABB &currBoundingBox = currNode->getBoundingBox();
     Vector3 center = currBoundingBox.getCenter();
     Vector3 distToCenter = center - currBoundingBox.min;
     int childIdx = 0;
@@ -96,9 +161,10 @@ void Octree::buildRecursively(
         }
     }
 
+
     for(int i = 0; i < 8; i++){
         OctreeNode *child = currNode->getChildren(i);
-        AABB boundingBox = child->getBoundingBox();
+        AABB &boundingBox = child->getBoundingBox();
 
         vector<Vector3> regionFaceIndexes;
         for(Vector3 faceIndex : faceIndexes){
@@ -111,7 +177,7 @@ void Octree::buildRecursively(
                 regionFaceIndexes.push_back(faceIndex);
             }
         }
-
+                
         if(regionFaceIndexes.empty()){
             child->setType(OCTREE_EMPTY_LEAF);
         }
@@ -121,7 +187,7 @@ void Octree::buildRecursively(
         }
         else {
             child->setType(OCTREE_NON_LEAF);
-            buildRecursively(child, currDepth + 1, vertices, regionFaceIndexes, octree);
+            OctreeBuilder::pushTask(child, currDepth + 1);
         }
     }
 }
@@ -197,4 +263,32 @@ void Octree::printStatistic(const bool isVerbose) {
     }
 
     cout << "===================================================================================================\n\n";
+}
+
+
+
+void Octree::threadWorkerTask(vector<Vector3> &vertices, vector<Vector3> &faceIndexes, Octree *octree){
+
+    bool isActive = false;
+    while(true){
+    
+        auto [currNode, currDepth] = OctreeBuilder::popTask();
+
+        if(currNode != nullptr){
+            if(!isActive){
+                isActive = true;
+                OctreeBuilder::incActiveThreads();
+            }
+            octree->buildRecursively(currNode, currDepth, vertices, faceIndexes, octree);
+        }
+        else if(isActive){
+            isActive = false;
+            if(OctreeBuilder::decActiveThreads() == 0) break;
+        }
+        else{
+            if(OctreeBuilder::getActiveThreads() == 0) break;
+        }
+
+    }
+
 }
