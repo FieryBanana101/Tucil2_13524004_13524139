@@ -144,8 +144,8 @@ void Octree::printStatistic(const bool isVerbose) {
     }
 
     // Do DFS to acquire needed statistics
-    vector<int> nodeStats(maxDepth);
-    vector<int> emptyLeafStats(maxDepth);
+    vector<int> nodeStats(maxDepth+1);
+    vector<int> emptyLeafStats(maxDepth+1);
     int nodeIdx = 1;
     
     traverse(

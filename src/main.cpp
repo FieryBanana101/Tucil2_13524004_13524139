@@ -11,8 +11,8 @@ using namespace std;
 int main(void) {
 
     /* Modify these variable for testing, TODO: these value should came from user interaction (preferably GUI?)*/
-    const string sourcePath = "test/teddy.obj", resultPath = "test/result.obj";
-    const int maxDepth = 7;
+    const string sourcePath = "test/line.obj", resultPath = "test/result.obj";
+    const int maxDepth = 10;
     const bool 
         showParseDuration = true,
         showBuildDuration = true,
