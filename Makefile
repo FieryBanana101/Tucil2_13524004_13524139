@@ -1,9 +1,10 @@
 CXX = g++
-CXXFLAGS = -Wall -Wextra -O2 -std=c++17 -Isrc -static
+CXXFLAGS = -Wall -Wextra -O2 -std=c++17 -Isrc
 SRC_DIR = src
 BIN_DIR = bin
-
+SFML_LIBS = -lsfml-graphics -lsfml-window -lsfml-system
 SRCS = $(wildcard $(SRC_DIR)/*.cpp)
+
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BIN_DIR)/%.o,$(SRCS))
 
 ifeq ($(OS),Windows_NT)
@@ -26,7 +27,7 @@ prebuild:
 
 $(TARGET): $(OBJS)
 	@echo Linking $@
-	@$(CXX) $(CXXFLAGS) -o $@ $^
+	@$(CXX) $(CXXFLAGS) -o $@ $^ $(SFML_LIBS)
 
 $(BIN_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@echo Compiling $<

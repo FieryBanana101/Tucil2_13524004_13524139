@@ -2,10 +2,12 @@
 #include <vector>
 #include <chrono>
 #include <thread>
+#include <limits>
 #include "ObjParser.hpp"
 #include "Triangle.hpp"
 #include "AABB.hpp"
 #include "Octree.hpp"
+#include "GUI.hpp"
 
 using namespace std;
 
@@ -20,32 +22,49 @@ mutex                                   OctreeBuilder::stackLock, OctreeBuilder:
 
 int main(void){
 
-    /* Modify these variable for testing, TODO: these value should came from user interaction (preferably GUI?) */
+    string sourcePath, resultPath;
+    int maxDepth, threadCount;
 
-    const string 
-        sourcePath = "test/teapot.obj",
-        resultPath = "test/result.obj";
-    const bool 
-        showParseDuration = true,
-        showBuildDuration = true,
-        showSerializeDuration = true,
-        showVerboseStats = false,
-        maximizeConcurrency = false;
-    const int 
-        maxDepth = 8,
-        threadsNumChoice = 4;  // Ignored when (maximizeConcurrency == true)
+    cout << "Input .obj file path: ";
+    getline(cin, sourcePath);
 
-    /******************************************************************************/
+    cout << "Output .obj file path: ";
+    getline(cin, resultPath);
 
-    OctreeBuilder::setMaxThreads((maximizeConcurrency ? thread::hardware_concurrency() : threadsNumChoice));
+    cout << "Max octree depth (1-12): ";
+    while(!(cin >> maxDepth) || maxDepth < 1 || maxDepth > 12){
+        cin.clear();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cout << "Invalid input. Enter a number between 1 and 12: ";
+    }
+
+    int hwThreads = static_cast<int>(thread::hardware_concurrency());
+    cout << "Number of threads (1-" << hwThreads << ", 0 for max): ";
+    while(!(cin >> threadCount) || threadCount < 0 || threadCount > hwThreads){
+        cin.clear();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cout << "Invalid input. Enter a number between 0 and " << hwThreads << ": ";
+    }
+    if(threadCount == 0) threadCount = hwThreads;
+
+    char showViewerChoice;
+    cout << "Show 3D viewer after voxelization? (y/n): ";
+    while(!(cin >> showViewerChoice) || (showViewerChoice != 'y' && showViewerChoice != 'n')){
+        cin.clear();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cout << "Enter y or n: ";
+    }
+    bool showViewer = (showViewerChoice == 'y');
+
+    OctreeBuilder::setMaxThreads(threadCount);
 
     vector<Vector3> vertices, faceIndexes;
-    ObjParser::parse(sourcePath, showParseDuration, vertices, faceIndexes);
+    ObjParser::parse(sourcePath, true, vertices, faceIndexes);
 
     auto processStart = chrono::steady_clock::now();
 
-    Octree *octree = new Octree(maxDepth, vertices, faceIndexes, showBuildDuration);
-    octree->printStatistic(showVerboseStats);
+    Octree *octree = new Octree(maxDepth, vertices, faceIndexes, true);
+    octree->printStatistic(false);
 
     auto processEnd = chrono::steady_clock::now();
     auto processDuration = chrono::duration_cast<chrono::milliseconds>(processEnd - processStart).count();
@@ -55,5 +74,12 @@ int main(void){
         cout << "Total processing time: " << processDuration << " ms\n\n";
     }
 
-    ObjParser::serialize(octree, resultPath, showSerializeDuration);
+    ObjParser::serialize(octree, resultPath, true);
+
+    if(showViewer){
+        GUI viewer(octree);
+        viewer.run();
+    }
+
+    delete octree;
 }
