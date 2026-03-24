@@ -20,19 +20,35 @@ void ObjParser::parse(const std::string& filepath, const bool showDuration, vect
         start = chrono::steady_clock::now();
     }
 
-    // TODO: more error handling here
+    int lineNum = 0;
     while(getline(file, line)) {
+        lineNum++;
         stringstream ss(line);
         string type;
         ss >> type;
         if (type == "v") {
             float x, y, z;
-            ss >> x >> y >> z;
+            if(!(ss >> x >> y >> z)){
+                throw runtime_error("Invalid vertex format at line " + to_string(lineNum) + ": '" + line + "'");
+            }
+            string extra;
+            if(ss >> extra){
+                throw runtime_error("Invalid vertex format at line " + to_string(lineNum) + " expected 3 values: '" + line + "'");
+            }
             vertices.push_back(Vector3(x, y, z));
         }
         else if (type == "f") {
             int i, j, k;
-            ss >> i >> j >> k;
+            if(!(ss >> i >> j >> k)){
+                throw runtime_error("Invalid face format at line " + to_string(lineNum) + ": '" + line + "'");
+            }
+            string extra;
+            if(ss >> extra){
+                throw runtime_error("Invalid face format at line " + to_string(lineNum) + " expected 3 values: '" + line + "'");
+            }
+            if(i < 1 || j < 1 || k < 1){
+                throw runtime_error("Face index must be positive at line " + to_string(lineNum) + ": '" + line + "'");
+            }
             faceIndexes.push_back(Vector3(i-1, j-1, k-1));
         }
     }
@@ -41,6 +57,13 @@ void ObjParser::parse(const std::string& filepath, const bool showDuration, vect
         throw runtime_error("Mesh described in '" + filepath + "' does not contain any triangles/faces.");
     }
 
+    int vertexCount = static_cast<int>(vertices.size());
+    for(int i = 0; i < static_cast<int>(faceIndexes.size()); i++){
+        Vector3 &f = faceIndexes[i];
+        if(static_cast<int>(f.x) >= vertexCount || static_cast<int>(f.y) >= vertexCount || static_cast<int>(f.z) >= vertexCount){
+            throw runtime_error("Face " + to_string(i+1) + " references a vertex index out of range (total vertices: " + to_string(vertexCount) + ").");
+        }
+    }
     cout << "Successfully parsed mesh in .obj file located at '" << filepath << "'\n";
 
     // Record end time and show duration if needed
