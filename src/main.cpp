@@ -41,9 +41,19 @@ int main(void){
 
     vector<Vector3> vertices, faceIndexes;
     ObjParser::parse(sourcePath, showParseDuration, vertices, faceIndexes);
-    
+
+    auto processStart = chrono::steady_clock::now();
+
     Octree *octree = new Octree(maxDepth, vertices, faceIndexes, showBuildDuration);
     octree->printStatistic(showVerboseStats);
+
+    auto processEnd = chrono::steady_clock::now();
+    auto processDuration = chrono::duration_cast<chrono::milliseconds>(processEnd - processStart).count();
+    if(processDuration >= 1000){
+        cout << "Total processing time: " << static_cast<float>(processDuration) / 1000 << " s\n\n";
+    } else {
+        cout << "Total processing time: " << processDuration << " ms\n\n";
+    }
 
     ObjParser::serialize(octree, resultPath, showSerializeDuration);
 }
