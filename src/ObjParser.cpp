@@ -77,6 +77,8 @@ void ObjParser::serialize(Octree *octree, const std::string& filepath, const boo
         start = chrono::steady_clock::now();
     }
     
+    cout << "Serializing octree into a mesh file with " << octree->getVerticesNum() << " vertices and " << octree->getFacesNum() << " faces...\n";
+
     int numVertices = 0, numVoxels = 0;
     octree->traverse(
     

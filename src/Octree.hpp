@@ -9,6 +9,7 @@
 #include <utility> // std::forward<>
 #include <stack>
 #include <mutex>
+#include <optional>
 
 using namespace std;
 
@@ -83,7 +84,7 @@ public:
      *  tree is constructed from the list of vertices and mesh triangles (faces) which are described by 3-tuple indexes.
      *  The construction duration can be shown using the bool in the last constructor parameter.
      */
-    Octree(const int maxDepth, vector<Vector3> vertices, vector<Vector3> faceIndexes, const bool showDuration);
+    Octree(const int maxDepth, vector<Vector3>& vertices, vector<Vector3>& faceIndexes, const bool showDuration);
     ~Octree(){ delete root; };
 
     OctreeNode *getRoot() const { return root; }
@@ -99,7 +100,7 @@ public:
     void incFacesNum() { facesNum++; }
 
     void printStatistic(const bool isVerbose);
-    static void threadWorkerTask(vector<Vector3> &vertices, vector<Vector3> &faceIndexes, Octree *octree);
+    static void threadWorkerTask(vector<Vector3> &vertices, Octree *octree);
 
 
     /* General purpose DFS to traverse octree and call a lambda function on each node,
@@ -129,10 +130,20 @@ public:
 class OctreeBuilder {
 
 private:
+    struct TaskDescriptor {
+        OctreeNode *currNode;
+        int currDepth;
+        vector<Vector3>* regionFaceIndexes;
+
+        TaskDescriptor(OctreeNode *currNode, int currDepth, vector<Vector3>* regionFaceIndexes) :
+            currNode(currNode), currDepth(currDepth), regionFaceIndexes(regionFaceIndexes) {}
+    };
+
     static int maxThreadUsed;
-    static stack<pair<OctreeNode *, int>> taskStack;
+    static stack<TaskDescriptor> taskStack;
     static int activeThreads;
-    static mutex stackLock, counterLock;
+    static vector<vector<Vector3>*> faceIndexesListTracker;  // To avoid memory leak
+    static mutex stackLock, counterLock, faceIndexesLock;
 
 public:
     static int getMaxThreads();
@@ -140,7 +151,9 @@ public:
     static int getActiveThreads();
     static int incActiveThreads();
     static int decActiveThreads();
-    static pair<OctreeNode *, int> popTask();
-    static void pushTask(OctreeNode *currNode, int currDepth);
+    static TaskDescriptor popTask();
+    static void pushTask(OctreeNode *currNode, int currDepth, vector<Vector3> *regionFaceIndexes);
+    static void addFaceIndexes(vector<Vector3> *ptr);
+    static void freeFaceIndexes(){ for(vector<Vector3> *ptr : faceIndexesListTracker){ delete ptr; } }
     
 };

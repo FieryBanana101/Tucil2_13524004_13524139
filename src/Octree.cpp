@@ -33,13 +33,10 @@ int OctreeBuilder::decActiveThreads(){
     return ret;
 }
 
-pair<OctreeNode *, int> OctreeBuilder::popTask(){
+OctreeBuilder::TaskDescriptor OctreeBuilder::popTask(){
     stackLock.lock();
-    pair<OctreeNode *, int> ret;
-    if(taskStack.empty()){
-        ret = pair<OctreeNode *, int>(nullptr, 0);
-    }
-    else{
+    TaskDescriptor ret(nullptr, 0, nullptr);
+    if(!taskStack.empty()){
         ret = taskStack.top();
         taskStack.pop();
     }
@@ -47,18 +44,24 @@ pair<OctreeNode *, int> OctreeBuilder::popTask(){
     return ret;
 }
 
-void OctreeBuilder::pushTask(OctreeNode *currNode, int currDepth){
+void OctreeBuilder::pushTask(OctreeNode *currNode, int currDepth, vector<Vector3> *regionFaceIndexes){
     stackLock.lock();
-    taskStack.push(make_pair(currNode, currDepth));
+    taskStack.push(TaskDescriptor(currNode, currDepth, regionFaceIndexes));
     stackLock.unlock();
 }
+
+void OctreeBuilder::addFaceIndexes(vector<Vector3> *ptr){ 
+    faceIndexesLock.lock();
+    faceIndexesListTracker.push_back(ptr); 
+    faceIndexesLock.unlock();
+};
 
 
 
 Octree::Octree(
     const int maxDepth, 
-    vector<Vector3> vertices, 
-    vector<Vector3> faceIndexes, 
+    vector<Vector3> &vertices, 
+    vector<Vector3> &faceIndexes, 
     const bool showDuration
 ) : maxDepth(maxDepth), voxelNum(0), verticesNum(0), facesNum(0)
 {
@@ -89,17 +92,20 @@ Octree::Octree(
     root = new OctreeNode(globalBoundingBox);
     root->setType(OCTREE_NON_LEAF);
 
-    OctreeBuilder::pushTask(root, 0);
+    vector<Vector3> *regionFaceIndexes = new vector<Vector3>(faceIndexes); // copy to heap so other threads can access it
+    OctreeBuilder::pushTask(root, 0, regionFaceIndexes);
+
     int maxThreadCount = OctreeBuilder::getMaxThreads();
     thread threads[maxThreadCount];
 
     for(int i = 0; i < maxThreadCount; i++){
-        threads[i] = thread(threadWorkerTask, ref(vertices), ref(faceIndexes), this);
+        threads[i] = thread(threadWorkerTask, ref(vertices), this);
     }
 
     for(int i = 0; i < maxThreadCount; i++){
         threads[i].join();
     }
+    OctreeBuilder::freeFaceIndexes();
     
     // Due to the naive way we serialize each voxel, this will be as simple as this, 
     // unless there is some kind of optimization on serializing the voxel into vertices and faces
@@ -166,7 +172,7 @@ void Octree::buildRecursively(
         OctreeNode *child = currNode->getChildren(i);
         AABB &boundingBox = child->getBoundingBox();
 
-        vector<Vector3> regionFaceIndexes;
+        vector<Vector3> *regionFaceIndexes = new vector<Vector3>();  // initialize in heap so other threads can access it
         for(Vector3 faceIndex : faceIndexes){
             Triangle triangle = Triangle(
                 Vector3(vertices[static_cast<int>(faceIndex.x)]),
@@ -174,20 +180,21 @@ void Octree::buildRecursively(
                 Vector3(vertices[static_cast<int>(faceIndex.z)])
             );
             if(boundingBox.intersect(triangle)){
-                regionFaceIndexes.push_back(faceIndex);
+                (*regionFaceIndexes).push_back(faceIndex);
             }
         }
                 
-        if(regionFaceIndexes.empty()){
+        if((*regionFaceIndexes).empty()){
             child->setType(OCTREE_EMPTY_LEAF);
         }
         else if(currDepth + 1 >= octree->getMaxDepth()){
             child->setType(OCTREE_FILLED_LEAF);
             octree->incVoxelNum();
         }
-        else {
+        else{
             child->setType(OCTREE_NON_LEAF);
-            OctreeBuilder::pushTask(child, currDepth + 1);
+            OctreeBuilder::addFaceIndexes(regionFaceIndexes);
+            OctreeBuilder::pushTask(child, currDepth + 1, regionFaceIndexes);
         }
     }
 }
@@ -267,19 +274,19 @@ void Octree::printStatistic(const bool isVerbose) {
 
 
 
-void Octree::threadWorkerTask(vector<Vector3> &vertices, vector<Vector3> &faceIndexes, Octree *octree){
+void Octree::threadWorkerTask(vector<Vector3> &vertices, Octree *octree){
 
     bool isActive = false;
     while(true){
     
-        auto [currNode, currDepth] = OctreeBuilder::popTask();
+        auto [currNode, currDepth, regionFaceIndexes] = OctreeBuilder::popTask();
 
         if(currNode != nullptr){
             if(!isActive){
                 isActive = true;
                 OctreeBuilder::incActiveThreads();
             }
-            octree->buildRecursively(currNode, currDepth, vertices, faceIndexes, octree);
+            octree->buildRecursively(currNode, currDepth, vertices, *regionFaceIndexes, octree);
         }
         else if(isActive){
             isActive = false;

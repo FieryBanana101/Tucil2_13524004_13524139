@@ -11,10 +11,11 @@ using namespace std;
 
 
 /* Global thread state for concurrency and synchronization, defined in static class OctreeBuilder */
-int                             OctreeBuilder::maxThreadUsed;
-stack<pair<OctreeNode *, int>>  OctreeBuilder::taskStack;
-int                             OctreeBuilder::activeThreads;
-mutex                           OctreeBuilder::stackLock, OctreeBuilder::counterLock;
+int                                     OctreeBuilder::maxThreadUsed;
+stack<OctreeBuilder::TaskDescriptor>    OctreeBuilder::taskStack;
+int                                     OctreeBuilder::activeThreads;
+vector<vector<Vector3>*>                OctreeBuilder::faceIndexesListTracker;
+mutex                                   OctreeBuilder::stackLock, OctreeBuilder::counterLock, OctreeBuilder::faceIndexesLock;
 
 
 int main(void){
@@ -22,7 +23,7 @@ int main(void){
     /* Modify these variable for testing, TODO: these value should came from user interaction (preferably GUI?) */
 
     const string 
-        sourcePath = "test/cow.obj",
+        sourcePath = "test/teapot.obj",
         resultPath = "test/result.obj";
     const bool 
         showParseDuration = true,
@@ -31,8 +32,8 @@ int main(void){
         showVerboseStats = false,
         maximizeConcurrency = false;
     const int 
-        maxDepth = 7,
-        threadsNumChoice = 8;  // Ignored when (maximizeConcurrency == true)
+        maxDepth = 8,
+        threadsNumChoice = 4;  // Ignored when (maximizeConcurrency == true)
 
     /******************************************************************************/
 
