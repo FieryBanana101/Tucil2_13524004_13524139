@@ -3,6 +3,7 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <algorithm>
 
 int OctreeBuilder::getMaxThreads(){
     return maxThreadUsed;
@@ -88,6 +89,13 @@ Octree::Octree(
        globalBoundingBox.max.y = max(globalBoundingBox.max.y, vertex.y);
        globalBoundingBox.max.z = max(globalBoundingBox.max.z, vertex.z);
     }
+
+    Vector3 size = globalBoundingBox.max - globalBoundingBox.min;
+    float maxSide = max({size.x, size.y, size.z});
+    Vector3 center = globalBoundingBox.getCenter();
+    float half = maxSide / 2.0f;
+    globalBoundingBox.min = Vector3(center.x - half, center.y - half, center.z - half);
+    globalBoundingBox.max = Vector3(center.x + half, center.y + half, center.z + half);
 
     root = new OctreeNode(globalBoundingBox);
     root->setType(OCTREE_NON_LEAF);
