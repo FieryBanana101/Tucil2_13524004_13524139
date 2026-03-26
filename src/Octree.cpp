@@ -268,12 +268,12 @@ void Octree::printStatistic(const bool isVerbose) {
 
 
     cout << "Nodes count based on depth: \n";
-    for(int i = 0; i < maxDepth; i++){
+    for(int i = 0; i <= maxDepth; i++){
         cout << "   " << i + 1 << ": " << nodeStats[i] << " Nodes\n";
     }
 
     cout << "Skipped nodes (AKA leaf nodes which does not intersect with any mesh face) count based on depth: \n";
-    for(int i = 0; i < maxDepth; i++){
+    for(int i = 0; i <= maxDepth; i++){
         cout << "   " << i + 1 << ": " << emptyLeafStats[i] << " Nodes\n";
     }
 
