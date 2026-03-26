@@ -169,9 +169,9 @@ void GUI::render(sf::RenderWindow &window) {
         float ambient = 0.25f;
         float brightness = ambient + (1.0f - ambient) * intensity;
 
-        uint8_t r = static_cast<uint8_t>(80 * brightness);
-        uint8_t g = static_cast<uint8_t>(200 * brightness);
-        uint8_t b = static_cast<uint8_t>(130 * brightness);
+        uint8_t r = static_cast<uint8_t>(180 * brightness);
+        uint8_t g = static_cast<uint8_t>(180 * brightness);
+        uint8_t b = static_cast<uint8_t>(180 * brightness);
 
         shape.setFillColor(sf::Color(r, g, b));
         shape.setOutlineColor(sf::Color(0, 0, 0, 50));
