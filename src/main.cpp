@@ -10,12 +10,20 @@
 using namespace std;
 
 
-/* Global thread state for concurrency and synchronization, defined in static class OctreeBuilder */
-int                                     OctreeBuilder::maxThreadUsed;
-stack<OctreeBuilder::TaskDescriptor>    OctreeBuilder::taskStack;
-int                                     OctreeBuilder::activeThreads;
-vector<vector<Vector3>*>                OctreeBuilder::faceIndexesListTracker;
-mutex                                   OctreeBuilder::stackLock, OctreeBuilder::counterLock, OctreeBuilder::faceIndexesLock;
+/* Multi-threading configuration */
+int                 ThreadingConfig::maxThreadToUse;
+ThreadSyncMethod    ThreadingConfig::syncMethod;
+
+/* Global octree operation utility, especially for concurrency and synchronization, defined in static class OctreeContext */
+mutex                                   OctreeContext::generalMutex, OctreeContext::specificMutex1, OctreeContext::specificMutex2,
+                                        OctreeContext::specificMutex3, OctreeContext::specificMutex4;
+condition_variable                      OctreeContext::condVar;
+
+stack<OctreeContext::TaskDescriptor>    OctreeContext::taskStack;
+int                                     OctreeContext::activeThreads;
+bool                                    OctreeContext::exitWorkerThreads;
+vector<vector<Vector3>*>                OctreeContext::faceIndexesListTracker;
+
 
 
 int main(void){
@@ -23,7 +31,7 @@ int main(void){
     /* Modify these variable for testing, TODO: these value should came from user interaction (preferably GUI?) */
 
     const string 
-        sourcePath = "test/teapot.obj",
+        sourcePath = "test/cow.obj",
         resultPath = "test/result.obj";
     const bool 
         showParseDuration = true,
@@ -34,16 +42,19 @@ int main(void){
     const int 
         maxDepth = 8,
         threadsNumChoice = 4;  // Ignored when (maximizeConcurrency == true)
+    const ThreadSyncMethod
+        syncMethod = SYNC_SPINLOCK; // Spinlock vs sleep on multi-threading
 
     /******************************************************************************/
 
-    OctreeBuilder::setMaxThreads((maximizeConcurrency ? thread::hardware_concurrency() : threadsNumChoice));
+    ThreadingConfig::maxThreadToUse = (maximizeConcurrency ? thread::hardware_concurrency() : threadsNumChoice);
+    ThreadingConfig::syncMethod = syncMethod;
 
     vector<Vector3> vertices, faceIndexes;
     ObjParser::parse(sourcePath, showParseDuration, vertices, faceIndexes);
 
     auto processStart = chrono::steady_clock::now();
-
+    
     Octree *octree = new Octree(maxDepth, vertices, faceIndexes, showBuildDuration);
     octree->printStatistic(showVerboseStats);
 
