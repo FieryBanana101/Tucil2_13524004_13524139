@@ -189,27 +189,42 @@ void GUI::drawOriginCross(sf::RenderWindow &window) {
     float extend = 0.5f;
     float gxMin = sceneBounds.min.x - extend * size.x;
     float gxMax = sceneBounds.max.x + extend * size.x;
+    float gyMin = sceneBounds.min.y - extend * size.y;
+    float gyMax = sceneBounds.max.y + extend * size.y;
     float gzMin = sceneBounds.min.z - extend * size.z;
     float gzMax = sceneBounds.max.z + extend * size.z;
     float cx = cameraTarget.x, cz = cameraTarget.z;
-    sf::Color crossColor(220, 0, 0, 200);
+    
+    sf::Color colorX(0, 220, 0, 200);   // Green
+    sf::Color colorY(60, 60, 255, 200); // Blue
+    sf::Color colorZ(220, 0, 0, 200);   // Red
 
     Vector3 sx0 = project3Dto2D(Vector3(gxMin, y, cz));
     Vector3 sx1 = project3Dto2D(Vector3(gxMax, y, cz));
     if (sx0.z > 0.1f && sx1.z > 0.1f) {
         sf::Vertex xLine[2] = {
-            {sf::Vector2f(sx0.x, sx0.y), crossColor},
-            {sf::Vector2f(sx1.x, sx1.y), crossColor}
+            {sf::Vector2f(sx0.x, sx0.y), colorX},
+            {sf::Vector2f(sx1.x, sx1.y), colorX}
         };
         window.draw(xLine, 2, sf::PrimitiveType::Lines);
+    }
+
+    Vector3 sy0 = project3Dto2D(Vector3(cx, gyMin, cz));
+    Vector3 sy1 = project3Dto2D(Vector3(cx, gyMax, cz));
+    if (sy0.z > 0.1f && sy1.z > 0.1f) {
+        sf::Vertex yLine[2] = {
+            {sf::Vector2f(sy0.x, sy0.y), colorY},
+            {sf::Vector2f(sy1.x, sy1.y), colorY}
+        };
+        window.draw(yLine, 2, sf::PrimitiveType::Lines);
     }
 
     Vector3 sz0 = project3Dto2D(Vector3(cx, y, gzMin));
     Vector3 sz1 = project3Dto2D(Vector3(cx, y, gzMax));
     if (sz0.z > 0.1f && sz1.z > 0.1f) {
         sf::Vertex zLine[2] = {
-            {sf::Vector2f(sz0.x, sz0.y), crossColor},
-            {sf::Vector2f(sz1.x, sz1.y), crossColor}
+            {sf::Vector2f(sz0.x, sz0.y), colorZ},
+            {sf::Vector2f(sz1.x, sz1.y), colorZ}
         };
         window.draw(zLine, 2, sf::PrimitiveType::Lines);
     }
