@@ -32,7 +32,7 @@ int main(void){
     /* Modify these variable for testing, TODO: these value should came from user interaction (preferably GUI?) */
 
     const string 
-        sourcePath = "test/cow.obj",
+        sourcePath = "test/line.obj",
         resultPath = "test/result.obj";
     const bool 
         showParseDuration = true,
@@ -40,9 +40,9 @@ int main(void){
         showSerializeDuration = true,
         showVerboseStats = false,
         maximizeConcurrency = false,
-        minimizeFileSize = false;
+        minimizeFileSize = true;
     const int
-        maxDepth = 11,
+        maxDepth = 12,
         threadsNumChoice = 8;  // Ignored when (maximizeConcurrency == true)
     const ThreadSyncMethod
         syncMethod = SYNC_SPINLOCK; // Spinlock vs sleep on multi-threading
