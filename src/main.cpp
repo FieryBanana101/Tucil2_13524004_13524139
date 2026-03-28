@@ -66,9 +66,23 @@ int main(void){
     bool showViewer = (showViewerChoice == 'y');
 
     BuildConfig::maxThreadToUse = threadCount;
-    // BuildConfig::syncMethod = ? // spinlock or sleep when the threads need to wait for a resource
-    // BuildConfig::minimizeFileSize ? // Will trade smaller file size for slower performance
+    int syncChoice;
+    cout << "Thread sync method (0 for Spinlock, 1 for Sleep): ";
+    while(!(cin >> syncChoice) || (syncChoice != 0 && syncChoice != 1)){
+        cin.clear();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cout << "Invalid input. Enter 0 or 1: ";
+    }
+    BuildConfig::syncMethod = (syncChoice == 0) ? SYNC_SPINLOCK : SYNC_SLEEP;
 
+    char minimizeChoice;
+    cout << "Minimize file size? this will trade smaller file size for even more slower performance (y/n): ";
+    while(!(cin >> minimizeChoice) || (minimizeChoice != 'y' && minimizeChoice != 'n')){
+        cin.clear();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cout << "Enter y or n: ";
+    }
+    BuildConfig::minimizeFileSize = (minimizeChoice == 'y') ? 1 : 0;
 
     vector<Vector3> vertices, faceIndexes;
     ObjParser::parse(sourcePath, true, vertices, faceIndexes);
