@@ -1,13 +1,9 @@
 # Tugas Kecil 2 IF2211 Strategi Algoritma
 ## Voxelization Objek 3D menggunakan Octree
 
-NIM Anggota 1: 13524004
-Nama: Muhammad Fatih Irkham Mauludi
-Kelas: K1
-
-NIM Anggota 2: 13524139
-Nama: Azri Arzaq Pohan
-Kelas: K3
+- NIM Anggota: 13524004, 13524139
+- Nama: Muhammad Fatih Irkham Mauludi, Azri Arzaq Pohan
+- Kelas: K1 & K3
 
 Program ini mengkonversi model 3D (file `.obj`) menjadi model *voxel* (tersusun dari kubus-kubus kecil) menggunakan struktur data **Octree** dengan algoritma **Divide and Conquer**.
 
@@ -16,8 +12,8 @@ Program membagi ruang 3D menjadi 8 sub-kubus secara rekursif hingga kedalaman ma
 ### Fitur
 - Konversi file `.obj` menjadi model voxel `.obj`
 - Algoritma Divide and Conquer berbasis Octree
-- **Concurrency** — mendukung multi-threading untuk mempercepat proses voxelisasi
-- **3D Viewer** — visualisasi interaktif hasil voxelisasi (drag untuk rotasi, scroll untuk zoom)
+- **Concurrency**: mendukung multi-threading untuk mempercepat proses voxelisasi
+- **3D Viewer**: visualisasi interaktif hasil voxelisasi (drag untuk rotasi, scroll untuk zoom)
 - Cross-platform (Windows & Linux)
 - Statistik lengkap: jumlah voxel, vertex, face, distribusi node per kedalaman, dan waktu proses
 
