@@ -38,9 +38,17 @@ GUI::GUI(Octree *octree)
     float diagonal = vec3Length(size);
     cameraDistance = diagonal * 1.8f;
 
+#ifdef _WIN32
     fontLoaded = font.openFromFile("C:/Windows/Fonts/consola.ttf");
     if (!fontLoaded) fontLoaded = font.openFromFile("C:/Windows/Fonts/arial.ttf");
     if (!fontLoaded) fontLoaded = font.openFromFile("C:/Windows/Fonts/cour.ttf");
+#else
+    fontLoaded = font.openFromFile("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf");
+    if (!fontLoaded) fontLoaded = font.openFromFile("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf");
+    if (!fontLoaded) fontLoaded = font.openFromFile("/usr/share/fonts/truetype/freefont/FreeMono.ttf");
+    if (!fontLoaded) fontLoaded = font.openFromFile("/mnt/c/Windows/Fonts/consola.ttf");
+    if (!fontLoaded) fontLoaded = font.openFromFile("/mnt/c/Windows/Fonts/arial.ttf");
+#endif
 
     collectFaces();
 

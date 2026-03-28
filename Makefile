@@ -2,8 +2,14 @@ CXX = g++
 CXXFLAGS = -Wall -Wextra -O2 -std=c++17 -Isrc
 SRC_DIR = src
 BIN_DIR = bin
-SFML_LIBS = -lsfml-graphics -lsfml-window -lsfml-system
 SRCS = $(wildcard $(SRC_DIR)/*.cpp)
+
+ifdef STATIC
+    CXXFLAGS += -DSFML_STATIC
+    SFML_LIBS = -L/usr/local/lib -lsfml-graphics-s -lsfml-window-s -lsfml-system-s -lfreetype -lGL -lX11 -lXrandr -lXcursor -lXi -ludev -lpthread
+else
+    SFML_LIBS = -L/usr/local/lib -lsfml-graphics -lsfml-window -lsfml-system
+endif
 
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BIN_DIR)/%.o,$(SRCS))
 
