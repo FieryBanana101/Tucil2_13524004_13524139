@@ -40,9 +40,9 @@ int main(void){
         showSerializeDuration = true,
         showVerboseStats = false,
         maximizeConcurrency = false,
-        minimizeFileSize = true;
+        minimizeFileSize = false;
     const int
-        maxDepth = 9,
+        maxDepth = 11,
         threadsNumChoice = 8;  // Ignored when (maximizeConcurrency == true)
     const ThreadSyncMethod
         syncMethod = SYNC_SPINLOCK; // Spinlock vs sleep on multi-threading
@@ -57,10 +57,17 @@ int main(void){
     ObjParser::parse(sourcePath, showParseDuration, vertices, faceIndexes);
 
     auto processStart = chrono::steady_clock::now();
-    
+
+
     Octree *octree = new Octree(maxDepth, vertices, faceIndexes, showBuildDuration);
-    ObjParser::serialize(octree, resultPath, showSerializeDuration);
+
+    if(BuildConfig::minimizeFileSize)
+        ObjParser::serializeSpaceOptimized(octree, resultPath, showSerializeDuration);
+    else
+        ObjParser::serialize(octree, resultPath, showSerializeDuration);
+
     octree->printStatistic(showVerboseStats);
+
 
     auto processEnd = chrono::steady_clock::now();
     auto processDuration = chrono::duration_cast<chrono::milliseconds>(processEnd - processStart).count();

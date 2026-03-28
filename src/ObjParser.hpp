@@ -20,4 +20,10 @@ class ObjParser {
             const std::string& filepath, 
             bool showDuration
         );
+
+        static void serializeSpaceOptimized(
+            Octree *octree, 
+            const std::string& filepath, 
+            bool showDuration
+        );
 };
