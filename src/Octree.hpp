@@ -12,6 +12,8 @@
 #include <mutex>
 #include <thread>
 #include <condition_variable>
+#include <map>
+#include <set>
 
 using namespace std;
 
@@ -30,9 +32,10 @@ enum ThreadSyncMethod {
 
 
 
-struct ThreadingConfig {
+struct BuildConfig {
     static int maxThreadToUse;
     static ThreadSyncMethod syncMethod;
+    static int minimizeFileSize;
 };
 
 
@@ -83,7 +86,6 @@ private:
     static bool exitWorkerThreads;
     static vector<vector<Vector3>*> faceIndexesListTracker;  // To avoid memory leak
 
-
 public:
 
     static void reset();
@@ -99,7 +101,7 @@ public:
     static void genericThreadWorker(Func&& func, Args&&... args){
     
         bool isActive = false;
-        switch(ThreadingConfig::syncMethod){
+        switch(BuildConfig::syncMethod){
 
             case SYNC_SPINLOCK:
                 while(true){
@@ -172,11 +174,13 @@ private:
     int voxelNum;
     int verticesNum;
     int facesNum;
-    mutex mut;  // To synchronize access to voxelNum
+    map<Vector3, uint32_t> uniqueVerticesMap;
+    set<tuple<uint32_t, uint32_t, uint32_t>> uniqueFacesSet;
+    mutex octreeMutex;
 
     void buildRecursively(
         OctreeNode *currNode, 
-        int currDepth,  
+        int currDepth,
         vector<Vector3>* faceIndexes,
         vector<Vector3>& vertices,
         Octree *octree
@@ -197,13 +201,17 @@ public:
     int getVerticesNum() const { return verticesNum; }
     int getFacesNum() const { return facesNum; }
     int getMaxDepth() const { return maxDepth; }
+    map<Vector3, uint32_t> &getVerticesMap() { return uniqueVerticesMap; }
+    set<tuple<uint32_t, uint32_t, uint32_t>> &getFacesSet() { return uniqueFacesSet; }
+    mutex &getMutex() {return octreeMutex;}
     void setVoxelNum(int val) { voxelNum = val; }
     void setVerticesNum(int val) { verticesNum = val; }
     void setFacesNum(int val) { facesNum = val; }
-    void incVoxelNum() { unique_lock<mutex>tempLock(mut); voxelNum++; }
+    void incVoxelNum() { voxelNum++; }
     void incVerticesNum() { verticesNum++; }
     void incFacesNum() { facesNum++; }
 
+    void deduplicateFaces();
     void printStatistic(const bool isVerbose);
 
 

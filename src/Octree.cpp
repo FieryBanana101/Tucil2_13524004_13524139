@@ -3,7 +3,8 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
-#include <algorithm>
+#include <algorithm>    
+
 
 
 void OctreeContext::reset(){
@@ -15,7 +16,7 @@ void OctreeContext::reset(){
 
 OctreeContext::TaskDescriptor OctreeContext::popTask(){
 
-    if(ThreadingConfig::syncMethod == SYNC_SPINLOCK){
+    if(BuildConfig::syncMethod == SYNC_SPINLOCK){
         TaskDescriptor ret = TaskDescriptor(nullptr, 0, nullptr);
         unique_lock<mutex> tempLock(specificMutex1);
 
@@ -47,7 +48,7 @@ OctreeContext::TaskDescriptor OctreeContext::popTask(){
 
 
 void OctreeContext::pushTask(OctreeNode *currNode, int currDepth, vector<Vector3> *regionFaceIndexes){
-    if(ThreadingConfig::syncMethod == SYNC_SPINLOCK){
+    if(BuildConfig::syncMethod == SYNC_SPINLOCK){
 
         unique_lock<mutex> tempLock(specificMutex1);
         taskStack.push(TaskDescriptor(currNode, currDepth, regionFaceIndexes));
@@ -74,6 +75,7 @@ void OctreeContext::addFaceIndexes(vector<Vector3> *ptr){
 void OctreeContext::flushSerializerString(ofstream *stream, stringstream &ss){
     unique_lock<mutex> tempLock(specificMutex3);
     (*stream) << ss.rdbuf();
+    ss.clear();
 }
 
 
@@ -134,7 +136,7 @@ Octree::Octree(
     OctreeContext::addFaceIndexes(regionFaceIndexes);
     OctreeContext::pushTask(root, 0, regionFaceIndexes);
 
-    int maxThreadCount = ThreadingConfig::maxThreadToUse;
+    int maxThreadCount = BuildConfig::maxThreadToUse;
     thread threads[maxThreadCount];
 
     auto buildThreadCallback = [](OctreeNode *currNode, int currDepth, vector<Vector3> *regionFaceIndexes, vector<Vector3> &vertices, Octree *octree){ 
@@ -159,8 +161,13 @@ Octree::Octree(
     
     // Due to the naive way we serialize each voxel, this will be as simple as this, 
     // unless there is some kind of optimization on serializing the voxel into vertices and faces
+    if(BuildConfig::minimizeFileSize){
+        verticesNum = uniqueVerticesMap.size();
+    }
+    else{
+        verticesNum = voxelNum * 8;
+    }
     facesNum = voxelNum * 12;
-    verticesNum = voxelNum * 8;
 
 
     // Record end time and show build duration if needed
@@ -238,7 +245,42 @@ void Octree::buildRecursively(
         }
         else if(currDepth + 1 >= octree->getMaxDepth()){
             child->setType(OCTREE_FILLED_LEAF);
-            octree->incVoxelNum();
+
+            unique_lock<mutex> tempLock(this->octreeMutex);
+            voxelNum++;
+
+            if(BuildConfig::minimizeFileSize){
+                tempLock.unlock();
+
+                /*
+                    Cube subdivision viewed from the face such that bottom-left-front is the min vertex,
+                    and top-right-back is the max vertex.
+
+                    3D view of the subdivision:
+                        v[7] v[6]
+                        v[4] v[5]  <-- back face
+                    v[3] v[2]
+                    v[0] v[1]  <-- front face
+                */
+
+                Vector3 v[8];
+                v[0] = Vector3(boundingBox.min.x, boundingBox.min.y, boundingBox.min.z);
+                v[1] = Vector3(boundingBox.max.x, boundingBox.min.y, boundingBox.min.z);
+                v[2] = Vector3(boundingBox.max.x, boundingBox.max.y, boundingBox.min.z);
+                v[3] = Vector3(boundingBox.min.x, boundingBox.max.y, boundingBox.min.z);
+                v[4] = Vector3(boundingBox.min.x, boundingBox.min.y, boundingBox.max.z);
+                v[5] = Vector3(boundingBox.max.x, boundingBox.min.y, boundingBox.max.z);
+                v[6] = Vector3(boundingBox.max.x, boundingBox.max.y, boundingBox.max.z);
+                v[7] = Vector3(boundingBox.min.x, boundingBox.max.y, boundingBox.max.z);
+
+                for(int i = 0; i < 8; i++){
+                    tempLock.lock();
+            
+                    (void) uniqueVerticesMap.try_emplace(v[i], 0);
+                    
+                    tempLock.unlock();
+                }
+            }
         }
         else{
             child->setType(OCTREE_NON_LEAF);
@@ -323,4 +365,110 @@ void Octree::printStatistic(const bool isVerbose) {
     }
 
     cout << "===================================================================================================\n\n";
+}
+
+
+
+void Octree::deduplicateFaces(){
+    
+    auto deduplicatorCallback = 
+    [](OctreeNode *currNode, int _, vector<Vector3> *__, Octree *octree)
+    {
+            (void) _, (void) __; // Due to convention of the genericThreadWorker class template, we will have these two unused variable
+
+            if(currNode->getType() == OctreeNodeType::OCTREE_FILLED_LEAF){
+                
+                AABB &boundingBox = currNode->getBoundingBox();
+
+                Vector3 v[8];
+                v[0] = Vector3(boundingBox.min.x, boundingBox.min.y, boundingBox.min.z);
+                v[1] = Vector3(boundingBox.max.x, boundingBox.min.y, boundingBox.min.z);
+                v[2] = Vector3(boundingBox.max.x, boundingBox.max.y, boundingBox.min.z);
+                v[3] = Vector3(boundingBox.min.x, boundingBox.max.y, boundingBox.min.z);
+                v[4] = Vector3(boundingBox.min.x, boundingBox.min.y, boundingBox.max.z);
+                v[5] = Vector3(boundingBox.max.x, boundingBox.min.y, boundingBox.max.z);
+                v[6] = Vector3(boundingBox.max.x, boundingBox.max.y, boundingBox.max.z);
+                v[7] = Vector3(boundingBox.min.x, boundingBox.max.y, boundingBox.max.z);
+
+
+                vector<vector<uint32_t>> triangleIdx = {
+                    {1, 3, 0},  // Front face
+                    {1, 3, 2},
+                    {2, 5, 1},  // Right face
+                    {2, 5, 6},
+                    {4, 6, 5},  // Back face
+                    {4, 6, 7},
+                    {0, 7, 4},  // Left face
+                    {0, 7, 3},
+                    {2, 7, 3},  // Top face
+                    {2, 7, 6},
+                    {0, 5, 1},  // Bottom face
+                    {0, 5, 4}
+                };
+
+                for(int i = 0; i < 12; i++){
+
+                    uint32_t faceIdx[3];
+                    Vector3 faceVertice[3];
+
+                    faceVertice[0] = v[triangleIdx[i][0]];
+                    faceVertice[1] = v[triangleIdx[i][1]];
+                    faceVertice[2] = v[triangleIdx[i][2]];
+
+                    faceIdx[0] = octree->uniqueVerticesMap[faceVertice[0]];
+                    faceIdx[1] = octree->uniqueVerticesMap[faceVertice[1]];
+                    faceIdx[2] = octree->uniqueVerticesMap[faceVertice[2]];
+
+                    /* Make sure the face indexes is unique per combination (not permutation), so we sort it */
+                    if(faceIdx[0] > faceIdx[1]) swap(faceIdx[0], faceIdx[1]);
+                    if(faceIdx[0] > faceIdx[2]) swap(faceIdx[0], faceIdx[2]);
+                    if(faceIdx[1] > faceIdx[2]) swap(faceIdx[1], faceIdx[2]);
+
+                    tuple<uint32_t, uint32_t, uint32_t> face = make_tuple(faceIdx[0], faceIdx[1], faceIdx[2]);
+                    
+                    unique_lock<mutex> tempLock(octree->octreeMutex);
+
+                    if(octree->uniqueFacesSet.find(face) == octree->uniqueFacesSet.end()){
+                        octree->uniqueFacesSet.insert(face);
+                    }
+
+                }
+
+            }
+
+            for(int i = 0; i < 8; i++){
+                OctreeNode *child = currNode->getChildren(i);
+                if(child) OctreeContext::pushTask(currNode->getChildren(i), 0, nullptr);  // We only need the node pointer information
+            }
+
+            return false;
+    };
+
+
+    OctreeContext::pushTask(root, 0, nullptr);
+
+    int threadsCnt = BuildConfig::maxThreadToUse;
+    thread threads[threadsCnt];
+    vector<stringstream *> ss(threadsCnt);
+
+    for(int i = 0; i < threadsCnt; i++){
+        ss[i] = new stringstream();
+
+        threads[i] = thread(
+            OctreeContext::genericThreadWorker<
+                decltype(deduplicatorCallback), 
+                Octree*
+            >,
+            deduplicatorCallback,
+            this
+        );
+    }
+
+    for(int i = 0; i < threadsCnt; i++){
+        threads[i].join();
+        delete ss[i];
+    }
+
+
+    facesNum = uniqueFacesSet.size();
 }

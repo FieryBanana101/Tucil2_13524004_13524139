@@ -10,9 +10,10 @@
 using namespace std;
 
 
-/* Multi-threading configuration */
-int                 ThreadingConfig::maxThreadToUse;
-ThreadSyncMethod    ThreadingConfig::syncMethod;
+/* Build configuration */
+int                 BuildConfig::maxThreadToUse;
+ThreadSyncMethod    BuildConfig::syncMethod;
+int                 BuildConfig::minimizeFileSize;
 
 /* Global octree operation utility, especially for concurrency and synchronization, defined in static class OctreeContext */
 mutex                                   OctreeContext::generalMutex, OctreeContext::specificMutex1, OctreeContext::specificMutex2,
@@ -38,17 +39,19 @@ int main(void){
         showBuildDuration = true,
         showSerializeDuration = true,
         showVerboseStats = false,
-        maximizeConcurrency = false;
-    const int 
-        maxDepth = 8,
-        threadsNumChoice = 4;  // Ignored when (maximizeConcurrency == true)
+        maximizeConcurrency = false,
+        minimizeFileSize = true;
+    const int
+        maxDepth = 9,
+        threadsNumChoice = 8;  // Ignored when (maximizeConcurrency == true)
     const ThreadSyncMethod
         syncMethod = SYNC_SPINLOCK; // Spinlock vs sleep on multi-threading
 
     /******************************************************************************/
 
-    ThreadingConfig::maxThreadToUse = (maximizeConcurrency ? thread::hardware_concurrency() : threadsNumChoice);
-    ThreadingConfig::syncMethod = syncMethod;
+    BuildConfig::maxThreadToUse = (maximizeConcurrency ? thread::hardware_concurrency() : threadsNumChoice);
+    BuildConfig::syncMethod = syncMethod;
+    BuildConfig::minimizeFileSize = minimizeFileSize;
 
     vector<Vector3> vertices, faceIndexes;
     ObjParser::parse(sourcePath, showParseDuration, vertices, faceIndexes);
@@ -56,6 +59,7 @@ int main(void){
     auto processStart = chrono::steady_clock::now();
     
     Octree *octree = new Octree(maxDepth, vertices, faceIndexes, showBuildDuration);
+    ObjParser::serialize(octree, resultPath, showSerializeDuration);
     octree->printStatistic(showVerboseStats);
 
     auto processEnd = chrono::steady_clock::now();
@@ -66,5 +70,4 @@ int main(void){
         cout << "Total processing time: " << processDuration << " ms\n\n";
     }
 
-    ObjParser::serialize(octree, resultPath, showSerializeDuration);
 }

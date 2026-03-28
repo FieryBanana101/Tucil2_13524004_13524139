@@ -3,6 +3,9 @@
 #include <sstream>
 #include <iostream>
 #include <chrono>
+#include <map>
+#include <set>
+
 using namespace std;
 
 void ObjParser::parse(const std::string& filepath, const bool showDuration, vector<Vector3>& vertices, vector<Vector3>& faceIndexes) {
@@ -101,132 +104,97 @@ void ObjParser::serialize(Octree *octree, const std::string& filepath, const boo
     
     cout << "Serializing octree into a mesh file with " << octree->getVerticesNum() << " vertices and " << octree->getFacesNum() << " faces...\n";
 
-    auto verticeSerializerCallback = [](OctreeNode *currNode, int _, vector<Vector3>* __, ofstream *file){
-
-        (void) _, (void) __; // Due to convention of the genericThreadWorker class template, we will have these two unused variable
-
-        if(currNode->getType() == OctreeNodeType::OCTREE_FILLED_LEAF){
-
-            AABB &boundingBox = currNode->getBoundingBox();
-            stringstream ss;
-
-            /*
-                Cube subdivision viewed from the face such that bottom-left-front is the min vertex,
-                and top-right-back is the max vertex.
-
-                3D view of the subdivision:
-                    v7 v6
-                    v4 v5  <-- back face
-                v3 v2
-                v0 v1  <-- front face
-            */
+    auto verticeSerializerCallback = [](ofstream *file, Octree *octree, int *tempVerticesTracker){
         
-            Vector3 v0, v1, v2, v3, v4, v5, v6, v7;
-            v0 = Vector3(boundingBox.min.x, boundingBox.min.y, boundingBox.min.z);
-            v1 = Vector3(boundingBox.max.x, boundingBox.min.y, boundingBox.min.z);
-            v2 = Vector3(boundingBox.max.x, boundingBox.max.y, boundingBox.min.z);
-            v3 = Vector3(boundingBox.min.x, boundingBox.max.y, boundingBox.min.z);
-            v4 = Vector3(boundingBox.min.x, boundingBox.min.y, boundingBox.max.z);
-            v5 = Vector3(boundingBox.max.x, boundingBox.min.y, boundingBox.max.z);
-            v6 = Vector3(boundingBox.max.x, boundingBox.max.y, boundingBox.max.z);
-            v7 = Vector3(boundingBox.min.x, boundingBox.max.y, boundingBox.max.z);
+        map<Vector3, uint32_t> &uniqueVerticesMap = octree->getVerticesMap();
+        int totalVertices = octree->getVerticesNum();
 
-            ss << "v " << v0.x << ' ' << v0.y << ' ' << v0.z << '\n';
-            ss << "v " << v1.x << ' ' << v1.y << ' ' << v1.z << '\n';
-            ss << "v " << v2.x << ' ' << v2.y << ' ' << v2.z << '\n';
-            ss << "v " << v3.x << ' ' << v3.y << ' ' << v3.z << '\n';
-            ss << "v " << v4.x << ' ' << v4.y << ' ' << v4.z << '\n';
-            ss << "v " << v5.x << ' ' << v5.y << ' ' << v5.z << '\n';
-            ss << "v " << v6.x << ' ' << v6.y << ' ' << v6.z << '\n';
-            ss << "v " << v7.x << ' ' << v7.y << ' ' << v7.z << '\n';
+        bool done = false;
+        while(!done){
+            
+            for(auto &[vec, idx] : uniqueVerticesMap){
 
-            ss << '\n';
+                unique_lock<mutex> tempLock(octree->getMutex());
 
-            OctreeContext::flushSerializerString(file, ss);
-        }
+                if((*tempVerticesTracker) == totalVertices){
+                    done = true;
+                    break;
+                }
 
-        for(int i = 0; i < 8; i++){
-            OctreeNode *child = currNode->getChildren(i);
-            if(child) OctreeContext::pushTask(currNode->getChildren(i), 0, nullptr);  // We only need the node pointer information
+                if(idx == 0){
+                    idx = ++(*tempVerticesTracker);
+                    (*file) << "v " << vec.x << ' ' << vec.y << ' ' << vec.z << '\n';
+
+                    if((*tempVerticesTracker) == totalVertices){
+                        done = true;
+                        break;
+                    }
+                }
+
+            }
+
         }
 
         return false;
+    };
+
+
+    auto faceSerializerCallback = [](ofstream *file, Octree *octree, set<tuple<uint32_t, uint32_t, uint32_t>> &uniqueFacesSet){
+
+        while(true){
+
+            unique_lock<mutex> tempLock(octree->getMutex());
+            if(uniqueFacesSet.empty()) break;
+            
+            tuple<int, int, int> faceIdx = *uniqueFacesSet.begin();
+            uniqueFacesSet.erase(uniqueFacesSet.begin());
+            (*file) << "f " << get<0>(faceIdx) << ' ' << get<1>(faceIdx) << ' ' << get<2>(faceIdx) << '\n';
+        }
 
     };
 
+
     OctreeContext::reset();
-    OctreeContext::pushTask(octree->getRoot(), 0, nullptr);
 
-    ofstream *stream = new ofstream(filepath);
+    ofstream *outfile = new ofstream(filepath);
 
-    int threadsCnt = ThreadingConfig::maxThreadToUse;
+    int threadsCnt = BuildConfig::maxThreadToUse;
     thread threads[threadsCnt];
 
-    (*stream) << "# Voxelize mesh's vertices (total: " << octree->getVerticesNum() << " vertices)\n\n";
+    (*outfile) << "# Voxelized mesh's vertices (total: " << octree->getVerticesNum() << " vertices)\n";
+
+    int *tempVerticesTracker = new int(0);
     for(int i = 0; i < threadsCnt; i++){
 
         threads[i] = thread(
-            OctreeContext::genericThreadWorker<decltype(verticeSerializerCallback), ofstream*>,
             verticeSerializerCallback,
-            stream
+            outfile,
+            octree,
+            tempVerticesTracker
         );
 
     }
     for(int i = 0; i < threadsCnt; i++) threads[i].join();
+    delete tempVerticesTracker;
 
+
+    if(BuildConfig::minimizeFileSize) octree->deduplicateFaces();
     
-    auto faceSerializerCallback = [](ofstream *file, int *verticeTracker, int totalVertices){
+    (*outfile) << "\n\n# Voxelized mesh's faces (total: " << octree->getFacesNum() << " faces)\n";
 
-            stringstream ss;
-            int numVertices = OctreeContext::getSerializerVertice(verticeTracker);
-
-            while(numVertices < totalVertices){
-
-                // Front face
-                ss << "f " << numVertices + 2 << ' ' << numVertices + 4 << ' ' << numVertices + 1 << '\n';
-                ss << "f " << numVertices + 2 << ' ' << numVertices + 4 << ' ' << numVertices + 3 << '\n';
-                
-                // Right face
-                ss << "f " << numVertices + 3 << ' ' << numVertices + 6 << ' ' << numVertices + 2 << '\n';
-                ss << "f " << numVertices + 3 << ' ' << numVertices + 6 << ' ' << numVertices + 7 << '\n';
-
-                // Back face
-                ss << "f " << numVertices + 5 << ' ' << numVertices + 7 << ' ' << numVertices + 6 << '\n';
-                ss << "f " << numVertices + 5 << ' ' << numVertices + 7 << ' ' << numVertices + 8 << '\n';
-
-                // Left face
-                ss << "f " << numVertices + 1 << ' ' << numVertices + 8 << ' ' << numVertices + 5 << '\n';
-                ss << "f " << numVertices + 1 << ' ' << numVertices + 8 << ' ' << numVertices + 4 << '\n';
-
-                // Top face
-                ss << "f " << numVertices + 3 << ' ' << numVertices + 8 << ' ' << numVertices + 4 << '\n';
-                ss << "f " << numVertices + 3 << ' ' << numVertices + 8 << ' ' << numVertices + 7 << '\n';
-
-                // Bottom face
-                ss << "f " << numVertices + 1 << ' ' << numVertices + 6 << ' ' << numVertices + 2 << '\n';
-                ss << "f " << numVertices + 1 << ' ' << numVertices + 6 << ' ' << numVertices + 5 << '\n';
-
-                ss << '\n';
-                OctreeContext::flushSerializerString(file, ss);
-                numVertices = OctreeContext::getSerializerVertice(verticeTracker);
-            }
-    };
-
-
-    int *verticeTracker = new int(0);
-    (*stream) << "\n\n# Voxelize mesh's faces (total: " << octree->getFacesNum() << " faces)\n";
-
+    auto *facesSetCopy = new set<tuple<uint32_t, uint32_t, uint32_t>> (octree->getFacesSet());
     for(int i = 0; i < threadsCnt; i++){
         threads[i] = thread(
             faceSerializerCallback,
-            stream,
-            verticeTracker,
-            octree->getVerticesNum()
+            outfile,
+            octree,
+            ref(*facesSetCopy)
         );
     }
-    for(int i = 0; i < threadsCnt; i++) threads[i].join();
-    delete verticeTracker;
-    delete stream;
+    for(int i = 0; i < threadsCnt; i++){
+        threads[i].join();
+    }
+    delete outfile;
 
 
     cout << "Voxelized mesh successfully saved at '" << filepath << "'\n";
