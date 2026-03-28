@@ -12,5 +12,12 @@ struct AABB {
     Vector3 getCenter() const;
     float getVolume() const;
     bool intersect(Triangle &triangle) const;
-    static void _getMinMax(float a, float b, float c, float &min, float &max);
+
+    static inline bool axisTest(
+        const Vector3& axis,
+        const Vector3& v0,
+        const Vector3& v1,
+        const Vector3& v2,
+        const Vector3& boxHalfSize
+    );
 };

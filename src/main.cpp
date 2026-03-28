@@ -12,12 +12,21 @@
 using namespace std;
 
 
-/* Global thread state for concurrency and synchronization, defined in static class OctreeBuilder */
-int                                     OctreeBuilder::maxThreadUsed;
-stack<OctreeBuilder::TaskDescriptor>    OctreeBuilder::taskStack;
-int                                     OctreeBuilder::activeThreads;
-vector<vector<Vector3>*>                OctreeBuilder::faceIndexesListTracker;
-mutex                                   OctreeBuilder::stackLock, OctreeBuilder::counterLock, OctreeBuilder::faceIndexesLock;
+/* Build configuration */
+int                 BuildConfig::maxThreadToUse;
+ThreadSyncMethod    BuildConfig::syncMethod;
+int                 BuildConfig::minimizeFileSize;
+
+/* Global octree operation utility, especially for concurrency and synchronization, defined in static class OctreeContext */
+mutex                                   OctreeContext::generalMutex, OctreeContext::specificMutex1, OctreeContext::specificMutex2,
+                                        OctreeContext::specificMutex3, OctreeContext::specificMutex4;
+condition_variable                      OctreeContext::condVar;
+
+stack<OctreeContext::TaskDescriptor>    OctreeContext::taskStack;
+int                                     OctreeContext::activeThreads;
+bool                                    OctreeContext::exitWorkerThreads;
+vector<vector<Vector3>*>                OctreeContext::faceIndexesListTracker;
+
 
 
 int main(void){
@@ -56,7 +65,10 @@ int main(void){
     }
     bool showViewer = (showViewerChoice == 'y');
 
-    OctreeBuilder::setMaxThreads(threadCount);
+    BuildConfig::maxThreadToUse = threadCount;
+    // BuildConfig::syncMethod = ? // spinlock or sleep when the threads need to wait for a resource
+    // BuildConfig::minimizeFileSize ? // Will trade smaller file size for slower performance
+
 
     vector<Vector3> vertices, faceIndexes;
     ObjParser::parse(sourcePath, true, vertices, faceIndexes);
@@ -64,7 +76,9 @@ int main(void){
     auto processStart = chrono::steady_clock::now();
 
     Octree *octree = new Octree(maxDepth, vertices, faceIndexes, true);
+    ObjParser::serialize(octree, resultPath, true);
     octree->printStatistic(false);
+
 
     auto processEnd = chrono::steady_clock::now();
     auto processDuration = chrono::duration_cast<chrono::milliseconds>(processEnd - processStart).count();
@@ -74,7 +88,6 @@ int main(void){
         cout << "Total processing time: " << processDuration << " ms\n\n";
     }
 
-    ObjParser::serialize(octree, resultPath, true);
 
     if(showViewer){
         GUI viewer(octree);

@@ -6,10 +6,14 @@
 #include <cstdint>
 #include <vector>
 #include <fstream>
+#include <sstream>
 #include <utility> // std::forward<>
 #include <stack>
 #include <mutex>
-#include <optional>
+#include <thread>
+#include <condition_variable>
+#include <map>
+#include <set>
 
 using namespace std;
 
@@ -21,6 +25,19 @@ enum OctreeNodeType {
 };
 
 
+enum ThreadSyncMethod {
+    SYNC_SPINLOCK,
+    SYNC_SLEEP
+};
+
+
+
+struct BuildConfig {
+    static int maxThreadToUse;
+    static ThreadSyncMethod syncMethod;
+    static int minimizeFileSize;
+};
+
 
 class OctreeNode {
 private:
@@ -30,6 +47,7 @@ private:
 
 
 public:
+
     OctreeNode(AABB boundingBox) : 
         boundingBox(boundingBox), 
         nodeType(OCTREE_EMPTY_LEAF) 
@@ -47,6 +65,108 @@ public:
 
 
 
+
+class OctreeContext {
+
+private:
+    struct TaskDescriptor {
+        OctreeNode *currNode;
+        int currDepth;
+        vector<Vector3> *regionFaceIndexes;
+
+        TaskDescriptor(OctreeNode *currNode, int currDepth, vector<Vector3>* regionFaceIndexes) :
+            currNode(currNode), currDepth(currDepth), regionFaceIndexes(regionFaceIndexes) {}
+    };
+
+    static mutex generalMutex, specificMutex1, specificMutex2, specificMutex3, specificMutex4;
+    static condition_variable condVar;
+    
+    static stack<TaskDescriptor> taskStack;
+    static int activeThreads;
+    static bool exitWorkerThreads;
+    static vector<vector<Vector3>*> faceIndexesListTracker;  // To avoid memory leak
+
+public:
+
+    static void reset();
+    static TaskDescriptor popTask();
+    static void pushTask(OctreeNode *currNode, int currDepth, vector<Vector3> *regionFaceIndexes);
+    static void addFaceIndexes(vector<Vector3> *ptr);
+    static void freeFaceIndexes(){ for(vector<Vector3> *ptr : faceIndexesListTracker){ delete ptr; } }
+
+    static void flushSerializerString(ofstream *stream, stringstream &ss);
+    static int getSerializerVertice(int *verticeTracker);
+
+    template <typename Func, typename... Args>
+    static void genericThreadWorker(Func&& func, Args&&... args){
+    
+        bool isActive = false;
+        switch(BuildConfig::syncMethod){
+
+            case SYNC_SPINLOCK:
+                while(true){
+                    
+                    auto [currNode, currDepth, regionFaceIndexes] = popTask();
+                    if(currNode != nullptr){
+                        if(!isActive){
+                            isActive = true;
+                            unique_lock<mutex> tempLock(specificMutex2);
+                            activeThreads++;
+                        }
+
+                        bool ret = forward<Func>(func)(currNode, currDepth, regionFaceIndexes, forward<Args>(args)...);
+                        if(ret){
+                            isActive = false;
+                            unique_lock<mutex> tempLock(specificMutex2);
+                            activeThreads--;
+                            break;
+                        }
+                    }
+                    else if(isActive){
+                        isActive = false;
+                        unique_lock<mutex> tempLock(specificMutex2);
+                        if(--activeThreads == 0) break;
+                    }
+                    else{
+                        unique_lock<mutex> tempLock(specificMutex2);
+                        if(activeThreads == 0) break;
+                    }
+
+                }
+                break;
+
+
+            case SYNC_SLEEP:
+                while(true){
+                
+                    auto [currNode, currDepth, regionFaceIndexes] = popTask();
+                    if(currNode == nullptr) break;
+
+                    bool ret = forward<Func>(func)(currNode, currDepth, regionFaceIndexes, forward<Args>(args)...);
+
+                    unique_lock<mutex> tempLock(generalMutex);
+                    activeThreads--;
+
+                    if(ret) break;
+
+                    if(taskStack.empty() && activeThreads == 0){
+
+                        exitWorkerThreads = true;
+                        tempLock.unlock();
+                        condVar.notify_all();
+                        break;
+
+                    }
+
+                }
+                break;    
+        }
+    }
+};
+
+
+
+
 class Octree {
 private:
     OctreeNode *root;
@@ -54,28 +174,17 @@ private:
     int voxelNum;
     int verticesNum;
     int facesNum;
+    map<Vector3, uint32_t> uniqueVerticesMap;
+    set<tuple<uint32_t, uint32_t, uint32_t>> uniqueFacesSet;
+    mutex octreeMutex;
 
     void buildRecursively(
         OctreeNode *currNode, 
-        int currDepth, 
-        vector<Vector3>& vertices, 
-        vector<Vector3>& faceIndexes,
+        int currDepth,
+        vector<Vector3>* faceIndexes,
+        vector<Vector3>& vertices,
         Octree *octree
     );
-
-    template <typename Func>
-    void traverseRecursively(OctreeNode *currNode, int currDepth, Func&& func){
-
-        forward<Func>(func)(currNode, currDepth);
-
-        for(int i = 0; i < 8; i++){
-            OctreeNode *child = currNode->getChildren(i);
-            if(child != nullptr){
-                traverseRecursively(child, currDepth + 1, func);
-            }
-        }
-
-    }
 
 
 public:
@@ -92,6 +201,9 @@ public:
     int getVerticesNum() const { return verticesNum; }
     int getFacesNum() const { return facesNum; }
     int getMaxDepth() const { return maxDepth; }
+    map<Vector3, uint32_t> &getVerticesMap() { return uniqueVerticesMap; }
+    set<tuple<uint32_t, uint32_t, uint32_t>> &getFacesSet() { return uniqueFacesSet; }
+    mutex &getMutex() {return octreeMutex;}
     void setVoxelNum(int val) { voxelNum = val; }
     void setVerticesNum(int val) { verticesNum = val; }
     void setFacesNum(int val) { facesNum = val; }
@@ -99,8 +211,8 @@ public:
     void incVerticesNum() { verticesNum++; }
     void incFacesNum() { facesNum++; }
 
+    void deduplicateFaces();
     void printStatistic(const bool isVerbose);
-    static void threadWorkerTask(vector<Vector3> &vertices, Octree *octree);
 
 
     /* General purpose DFS to traverse octree and call a lambda function on each node,
@@ -119,41 +231,24 @@ public:
      *      (void) currDepth;
      * });
      */
-    template <typename Func>
-    void traverse(Func&& func){
-        traverseRecursively(root, 0, func);
+    template <typename Func, typename... Args>
+    void traverse(Func&& func, Args&&... args){
+
+        stack<pair<OctreeNode *, int>> st;
+        st.push(make_pair(root, 0));
+
+        while(!st.empty()){
+            auto [currNode, currDepth] = st.top(); 
+            st.pop();
+            forward<Func>(func)(currNode, currDepth);
+            for(int i = 0; i < 8; i++){
+                OctreeNode *child = currNode->getChildren(i);
+                if(child) st.push(make_pair(child, currDepth + 1));
+            }
+        }
+
     }
+
+    friend class OctreeContext;
 };
 
-
-
-class OctreeBuilder {
-
-private:
-    struct TaskDescriptor {
-        OctreeNode *currNode;
-        int currDepth;
-        vector<Vector3>* regionFaceIndexes;
-
-        TaskDescriptor(OctreeNode *currNode, int currDepth, vector<Vector3>* regionFaceIndexes) :
-            currNode(currNode), currDepth(currDepth), regionFaceIndexes(regionFaceIndexes) {}
-    };
-
-    static int maxThreadUsed;
-    static stack<TaskDescriptor> taskStack;
-    static int activeThreads;
-    static vector<vector<Vector3>*> faceIndexesListTracker;  // To avoid memory leak
-    static mutex stackLock, counterLock, faceIndexesLock;
-
-public:
-    static int getMaxThreads();
-    static void setMaxThreads(int numThreads);
-    static int getActiveThreads();
-    static int incActiveThreads();
-    static int decActiveThreads();
-    static TaskDescriptor popTask();
-    static void pushTask(OctreeNode *currNode, int currDepth, vector<Vector3> *regionFaceIndexes);
-    static void addFaceIndexes(vector<Vector3> *ptr);
-    static void freeFaceIndexes(){ for(vector<Vector3> *ptr : faceIndexesListTracker){ delete ptr; } }
-    
-};
