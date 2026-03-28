@@ -12,8 +12,8 @@ Program membagi ruang 3D menjadi 8 sub-kubus secara rekursif hingga kedalaman ma
 ### Fitur
 - Konversi file `.obj` menjadi model voxel `.obj`
 - Algoritma Divide and Conquer berbasis Octree
-- **Concurrency** — mendukung multi-threading untuk mempercepat proses voxelisasi
-- **3D Viewer** — visualisasi interaktif hasil voxelisasi (drag untuk rotasi, scroll untuk zoom)
+- **Concurrency**: mendukung multi-threading untuk mempercepat proses voxelisasi
+- **3D Viewer**: visualisasi interaktif hasil voxelisasi (drag untuk rotasi, scroll untuk zoom)
 - Cross-platform (Windows & Linux)
 - Statistik lengkap: jumlah voxel, vertex, face, distribusi node per kedalaman, dan waktu proses
 
